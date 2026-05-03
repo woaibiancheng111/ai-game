@@ -72,6 +72,12 @@ export default function App() {
   const [choices, setChoices] = useState<PlayerChoice[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isTyping] = useState(false)
+  const [pendingNPCTask, setPendingNPCTask] = useState<{
+    nextNode: StoryNode
+    currentHistory: ConversationMessage[]
+    predictedState: GameState
+    npcMessageId: string
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -238,6 +244,48 @@ export default function App() {
     setPhase('intro')
   }, [])
 
+  const handleAllTypingComplete = useCallback(async () => {
+    if (!pendingNPCTask) {
+      return
+    }
+
+    const { nextNode, currentHistory, predictedState, npcMessageId } = pendingNPCTask
+    
+    setPendingNPCTask(null)
+
+    try {
+      const npcMessage: ConversationMessage = {
+        id: npcMessageId,
+        role: 'npc',
+        content: '',
+        timestamp: Date.now(),
+        npcId: nextNode.npcId
+      }
+
+      setMessages(prev => [...prev, npcMessage])
+
+      const npcReplyContent = await generateNPCReply(nextNode, currentHistory, {
+        ...predictedState,
+        currentNode: nextNode.id,
+        currentLocation: nextNode.location
+      }, npcMessageId)
+
+      if (!npcReplyContent) {
+        setMessages(prev => prev.filter(msg => msg.id !== npcMessageId))
+      }
+
+      if (nextNode.playerChoices && nextNode.playerChoices.length > 0) {
+        setChoices(nextNode.playerChoices)
+      } else if (nextNode.isEnding) {
+        setPhase('gameover')
+      }
+    } catch (err) {
+      console.error('处理 NPC 回复失败:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [pendingNPCTask, generateNPCReply])
+
   const handleChoiceSelect = useCallback(async (choice: PlayerChoice) => {
     const predictedState = applyChoiceToGameState(gameState, choice)
     applyStatusChanges(choice)
@@ -296,45 +344,33 @@ export default function App() {
         timestamp: Date.now() + 1
       }
 
-      const nextMessages: ConversationMessage[] = [nextNodeNarration]
-      let npcMessageId: string | null = null
+      setMessages(prev => [...prev, nextNodeNarration])
 
       if (nextNode.npcId && getNPCById(nextNode.npcId)) {
-        npcMessageId = `npc-${nextNode.npcId}-${Date.now()}`
-        nextMessages.push({
-          id: npcMessageId,
-          role: 'npc',
-          content: '',
-          timestamp: Date.now() + 2,
-          npcId: nextNode.npcId
+        const npcMessageId = `npc-${nextNode.npcId}-${Date.now()}`
+        setPendingNPCTask({
+          nextNode,
+          currentHistory: [...currentHistory, nextNodeNarration],
+          predictedState: {
+            ...predictedState,
+            currentNode: nextNode.id,
+            currentLocation: nextNode.location
+          },
+          npcMessageId
         })
-      }
-
-      setMessages(prev => [...prev, ...nextMessages])
-
-      if (npcMessageId) {
-        const npcReplyContent = await generateNPCReply(nextNode, [...currentHistory, nextNodeNarration], {
-          ...predictedState,
-          currentNode: nextNode.id,
-          currentLocation: nextNode.location
-        }, npcMessageId)
-
-        if (!npcReplyContent) {
-          setMessages(prev => prev.filter(msg => msg.id !== npcMessageId))
+      } else {
+        if (nextNode.playerChoices && nextNode.playerChoices.length > 0) {
+          setChoices(nextNode.playerChoices)
+        } else if (nextNode.isEnding) {
+          setPhase('gameover')
         }
-      }
-
-      if (nextNode.playerChoices && nextNode.playerChoices.length > 0) {
-        setChoices(nextNode.playerChoices)
-      } else if (nextNode.isEnding) {
-        setPhase('gameover')
+        setIsLoading(false)
       }
     } catch (err) {
       console.error('加载下一节点失败:', err)
-    } finally {
       setIsLoading(false)
     }
-  }, [applyStatusChanges, gameState, messages, generateNPCReply])
+  }, [applyStatusChanges, gameState, messages])
 
   const handleRetry = useCallback(() => {
     setPhase('setup')
@@ -401,6 +437,7 @@ export default function App() {
           messages={messages}
           isLoading={isLoading}
           playerName={gameState.playerName}
+          onAllTypingComplete={handleAllTypingComplete}
         />
         <DecisionPanel
           choices={choices}

@@ -6,6 +6,7 @@ interface DialogueBoxProps {
   messages: ConversationMessage[]
   isLoading: boolean
   playerName: string
+  onAllTypingComplete?: () => void
 }
 
 interface TypingState {
@@ -14,7 +15,7 @@ interface TypingState {
   isTyping: boolean
 }
 
-export default function DialogueBox({ node, messages, isLoading, playerName }: DialogueBoxProps) {
+export default function DialogueBox({ node, messages, isLoading, playerName, onAllTypingComplete }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [typingStates, setTypingStates] = useState<Record<string, TypingState>>({})
   const [messagesOrder, setMessagesOrder] = useState<string[]>([])
@@ -30,6 +31,25 @@ export default function DialogueBox({ node, messages, isLoading, playerName }: D
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages, typingStates])
+
+  useEffect(() => {
+    const typingMessages = messages.filter(m => 
+      m.role === 'narration' || m.role === 'player'
+    )
+    
+    if (typingMessages.length === 0) {
+      return
+    }
+    
+    const allTypingComplete = typingMessages.every(msg => {
+      const state = typingStates[msg.id]
+      return state && state.displayedContent === msg.content && !state.isTyping
+    })
+    
+    if (allTypingComplete && onAllTypingComplete) {
+      onAllTypingComplete()
+    }
+  }, [messages, typingStates, onAllTypingComplete])
 
   const getMessageById = useCallback((id: string): ConversationMessage | undefined => {
     return messagesRef.current.find(m => m.id === id)
