@@ -8,15 +8,16 @@ interface DialogueBoxProps {
   playerName: string
 }
 
-interface DisplayedMessage extends ConversationMessage {
-  isFullyDisplayed: boolean
+interface TypingState {
+  messageId: string
   displayedContent: string
+  isTyping: boolean
 }
 
 export default function DialogueBox({ node, messages, isLoading, playerName }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [displayedMessages, setDisplayedMessages] = useState<DisplayedMessage[]>([])
-  const [currentTypingIndex, setCurrentTypingIndex] = useState<number>(-1)
+  const [typingStates, setTypingStates] = useState<Record<string, TypingState>>({})
+  const [messagesOrder, setMessagesOrder] = useState<string[]>([])
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null)
   const messagesRef = useRef<ConversationMessage[]>([])
 
@@ -28,98 +29,140 @@ export default function DialogueBox({ node, messages, isLoading, playerName }: D
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [displayedMessages])
+  }, [messages, typingStates])
 
-  const updateDisplayedMessage = useCallback((index: number, updates: Partial<DisplayedMessage>) => {
-    setDisplayedMessages(prev => {
-      const newMessages = [...prev]
-      if (newMessages[index]) {
-        newMessages[index] = { ...newMessages[index], ...updates }
-      }
-      return newMessages
-    })
+  const getMessageById = useCallback((id: string): ConversationMessage | undefined => {
+    return messagesRef.current.find(m => m.id === id)
   }, [])
 
-  const typeMessage = useCallback((messageIndex: number, fullContent: string) => {
+  const startTypingNextMessage = useCallback((afterId: string) => {
+    const currentIndex = messagesOrder.indexOf(afterId)
+    if (currentIndex === -1 || currentIndex >= messagesOrder.length - 1) {
+      return
+    }
+
+    const nextId = messagesOrder[currentIndex + 1]
+    const nextMessage = getMessageById(nextId)
+    
+    if (nextMessage && (nextMessage.role === 'narration' || nextMessage.role === 'player')) {
+      const currentTypingState = typingStates[nextId]
+      if (!currentTypingState || (!currentTypingState.isTyping && currentTypingState.displayedContent === '')) {
+        startTyping(nextId, nextMessage.content)
+      }
+    }
+  }, [messagesOrder, getMessageById, typingStates])
+
+  const startTyping = useCallback((messageId: string, fullContent: string) => {
     if (typingTimerRef.current) {
-      clearInterval(typingTimerRef.current)
+      clearTimeout(typingTimerRef.current)
       typingTimerRef.current = null
     }
 
     let currentCharIndex = 0
     const typingSpeed = 30
 
+    setTypingStates(prev => ({
+      ...prev,
+      [messageId]: {
+        messageId,
+        displayedContent: '',
+        isTyping: true
+      }
+    }))
+
     const typeNextChar = () => {
       if (currentCharIndex < fullContent.length) {
         currentCharIndex++
         const newContent = fullContent.slice(0, currentCharIndex)
-        updateDisplayedMessage(messageIndex, { displayedContent: newContent })
+        
+        setTypingStates(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            displayedContent: newContent
+          }
+        }))
         
         typingTimerRef.current = setTimeout(typeNextChar, typingSpeed)
       } else {
-        updateDisplayedMessage(messageIndex, { isFullyDisplayed: true })
-        setCurrentTypingIndex(-1)
+        setTypingStates(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            isTyping: false
+          }
+        }))
         
         setTimeout(() => {
-          if (messagesRef.current.length > messageIndex + 1) {
-            const nextMessage = messagesRef.current[messageIndex + 1]
-            if (nextMessage.role === 'narration' || nextMessage.role === 'player') {
-              setCurrentTypingIndex(messageIndex + 1)
-            }
-          }
+          startTypingNextMessage(messageId)
         }, 500)
       }
     }
 
     typeNextChar()
-  }, [updateDisplayedMessage])
+  }, [startTypingNextMessage])
 
   useEffect(() => {
-    const currentDisplayedIds = displayedMessages.map(m => m.id)
-    const newMessages = messages.filter(m => !currentDisplayedIds.includes(m.id))
+    const currentIds = new Set(messagesOrder)
+    const newMessages = messages.filter(m => !currentIds.has(m.id))
     
     if (newMessages.length > 0) {
-      const newDisplayedMessages: DisplayedMessage[] = newMessages.map(msg => ({
-        ...msg,
-        isFullyDisplayed: msg.role !== 'narration' && msg.role !== 'player',
-        displayedContent: msg.role === 'narration' || msg.role === 'player' ? '' : msg.content
-      }))
+      const newIds = newMessages.map(m => m.id)
+      setMessagesOrder(prev => [...prev, ...newIds])
       
-      setDisplayedMessages(prev => [...prev, ...newDisplayedMessages])
-      
-      const firstNewNarrationIndex = displayedMessages.length + 
-        newMessages.findIndex(m => m.role === 'narration' || m.role === 'player')
-      
-      if (firstNewNarrationIndex >= displayedMessages.length && currentTypingIndex === -1) {
-        setCurrentTypingIndex(firstNewNarrationIndex)
-      }
+      newMessages.forEach(msg => {
+        if (msg.role === 'narration' || msg.role === 'player') {
+          setTypingStates(prev => ({
+            ...prev,
+            [msg.id]: {
+              messageId: msg.id,
+              displayedContent: '',
+              isTyping: false
+            }
+          }))
+        }
+      })
     }
-  }, [messages, displayedMessages, currentTypingIndex])
+  }, [messages, messagesOrder])
 
   useEffect(() => {
-    if (currentTypingIndex >= 0 && currentTypingIndex < displayedMessages.length) {
-      const message = displayedMessages[currentTypingIndex]
-      if (!message.isFullyDisplayed && message.displayedContent === '') {
-        typeMessage(currentTypingIndex, message.content)
-      }
-    }
+    const messagesToType = messages.filter(m => 
+      (m.role === 'narration' || m.role === 'player') && 
+      typingStates[m.id]?.displayedContent === '' && 
+      !typingStates[m.id]?.isTyping
+    )
     
-    return () => {
-      if (typingTimerRef.current) {
-        clearTimeout(typingTimerRef.current)
-        typingTimerRef.current = null
+    if (messagesToType.length > 0) {
+      const firstMessageToType = messagesToType.reduce((earliest, current) => {
+        const earliestIndex = messagesOrder.indexOf(earliest.id)
+        const currentIndex = messagesOrder.indexOf(current.id)
+        return (earliestIndex === -1 || (currentIndex !== -1 && currentIndex < earliestIndex)) ? current : earliest
+      }, messagesToType[0])
+      
+      const allPreviousMessages = messages.slice(0, messages.indexOf(firstMessageToType))
+      const previousTypingMessages = allPreviousMessages.filter(m => 
+        m.role === 'narration' || m.role === 'player'
+      )
+      const allPreviousFinished = previousTypingMessages.every(m => 
+        typingStates[m.id]?.displayedContent === m.content && !typingStates[m.id]?.isTyping
+      )
+      
+      if (allPreviousFinished || previousTypingMessages.length === 0) {
+        startTyping(firstMessageToType.id, firstMessageToType.content)
       }
     }
-  }, [currentTypingIndex, displayedMessages, typeMessage])
+  }, [messages, typingStates, messagesOrder, startTyping])
 
-  const getMessageContent = (msg: DisplayedMessage): string => {
+  const getMessageContent = (msg: ConversationMessage): string => {
     if (msg.role === 'narration' || msg.role === 'player') {
-      return msg.displayedContent || ''
+      const typingState = typingStates[msg.id]
+      if (typingState) {
+        return typingState.displayedContent
+      }
+      return ''
     }
     return msg.content
   }
-
-  const latestNarration = messages.filter(m => m.role === 'narration').pop()
 
   return (
     <div style={styles.container}>
@@ -132,13 +175,13 @@ export default function DialogueBox({ node, messages, isLoading, playerName }: D
       </div>
 
       <div style={styles.scrollArea} ref={scrollRef}>
-        {displayedMessages.length === 0 && node && (
+        {messages.length === 0 && node && (
           <div style={styles.narrationBox}>
             <p style={styles.narrationText}>{node.description}</p>
           </div>
         )}
 
-        {displayedMessages.map(msg => (
+        {messages.map(msg => (
           <div
             key={msg.id}
             style={{
