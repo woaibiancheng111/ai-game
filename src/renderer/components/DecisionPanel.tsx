@@ -47,34 +47,6 @@ export default function DecisionPanel({ choices, onSelect, disabled }: DecisionP
               {String.fromCharCode(65 + index)}
             </span>
             <span style={styles.choiceText}>{choice.text}</span>
-            {choice.statusChanges && (
-              <div style={styles.effects}>
-                {choice.statusChanges.gpa !== undefined && (
-                  <span style={{
-                    ...styles.effectTag,
-                    color: choice.statusChanges.gpa >= 0 ? '#4ade80' : '#f87171'
-                  }}>
-                    GPA {choice.statusChanges.gpa >= 0 ? '+' : ''}{choice.statusChanges.gpa.toFixed(1)}
-                  </span>
-                )}
-                {choice.statusChanges.social !== undefined && (
-                  <span style={{
-                    ...styles.effectTag,
-                    color: choice.statusChanges.social >= 0 ? '#4ade80' : '#f87171'
-                  }}>
-                    社交 {choice.statusChanges.social >= 0 ? '+' : ''}{choice.statusChanges.social}
-                  </span>
-                )}
-                {choice.statusChanges.reputation !== undefined && (
-                  <span style={{
-                    ...styles.effectTag,
-                    color: choice.statusChanges.reputation >= 0 ? '#4ade80' : '#f87171'
-                  }}>
-                    声誉 {choice.statusChanges.reputation >= 0 ? '+' : ''}{choice.statusChanges.reputation}
-                  </span>
-                )}
-              </div>
-            )}
           </button>
         ))}
       </div>

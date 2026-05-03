@@ -400,6 +400,7 @@ export default function App() {
           node={currentNode}
           messages={messages}
           isLoading={isLoading}
+          playerName={gameState.playerName}
         />
         <DecisionPanel
           choices={choices}
