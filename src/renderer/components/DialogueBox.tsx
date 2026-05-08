@@ -1,87 +1,216 @@
-import React, { useEffect, useRef } from 'react'
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { StoryNode, ConversationMessage } from '../../data/types'
+import { getNPCDisplayName, getNPCInitial } from '../../engine/npc'
+import { getMessageRevealDelay } from '../utils/revealTiming'
 
 interface DialogueBoxProps {
   node: StoryNode | null
   messages: ConversationMessage[]
   isLoading: boolean
+  sceneImageUrl?: string
+  onTypingChange?: (typing: boolean) => void
 }
 
-export default function DialogueBox({ node, messages, isLoading }: DialogueBoxProps) {
+interface MessageItemProps {
+  msg: ConversationMessage
+  onNpcTypingChange: (messageId: string, typing: boolean) => void
+  onNpcTypingTick: () => void
+}
+
+const NPC_TYPEWRITER_RECENT_WINDOW_MS = 12000
+const NPC_TYPEWRITER_BASE_DELAY = 24
+
+export default function DialogueBox({ node, messages, isLoading, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const previousMessageIds = useRef<string[]>([])
+  const scrollFrame = useRef<number | null>(null)
+  const [visibleMessageCount, setVisibleMessageCount] = useState(0)
+  const [typingNpcMessageIds, setTypingNpcMessageIds] = useState<Record<string, boolean>>({})
+  const messageIds = useMemo(() => messages.map(msg => msg.id), [messages])
+  const messageSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}`).join('|'), [messages])
+  const messageRevealSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}:${msg.isStreaming ? 'streaming' : 'static'}`).join('|'), [messages])
+  const nextMessageRevealKey = useMemo(() => {
+    const message = messages[visibleMessageCount]
+    if (!message) {
+      return 'none'
+    }
+
+    const contentKey = message.isStreaming ? 'streaming-content' : message.content.length
+    return `${message.id}:${message.role}:${message.isStreaming ? 'streaming' : 'static'}:${contentKey}`
+  }, [messageRevealSignature, messages, visibleMessageCount])
+  const visibleContentSignature = useMemo(
+    () => messages
+      .slice(0, visibleMessageCount)
+      .map(msg => `${msg.id}:${msg.content.length}`)
+      .join('|'),
+    [messages, visibleMessageCount]
+  )
+  const visibleMessageIdSignature = useMemo(
+    () => messages
+      .slice(0, visibleMessageCount)
+      .map(msg => msg.id)
+      .join('|'),
+    [messages, visibleMessageCount]
+  )
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollFrame.current !== null) {
+      window.cancelAnimationFrame(scrollFrame.current)
+    }
+
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+        bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
+        scrollFrame.current = null
+      })
+    })
+  }, [])
+
+  const handleNpcTypingChange = useCallback((messageId: string, typing: boolean) => {
+    setTypingNpcMessageIds(prev => {
+      const alreadyTyping = Boolean(prev[messageId])
+
+      if (typing && alreadyTyping) {
+        return prev
+      }
+
+      if (!typing && !alreadyTyping) {
+        return prev
+      }
+
+      if (!typing) {
+        const next = { ...prev }
+        delete next[messageId]
+        return next
+      }
+
+      return {
+        ...prev,
+        [messageId]: true
+      }
+    })
+  }, [])
+
+  const handleNpcTypingTick = useCallback(() => {
+    scrollToBottom()
+  }, [scrollToBottom])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
+    const previousIds = previousMessageIds.current
+    const isSamePrefix = previousIds.every((id, index) => messageIds[index] === id)
 
-  const latestNarration = messages.filter(m => m.role === 'narration').pop()
+    if (!isSamePrefix || messageIds.length < previousIds.length) {
+      setVisibleMessageCount(0)
+    } else {
+      setVisibleMessageCount(prev => Math.min(prev, messages.length))
+    }
+
+    previousMessageIds.current = messageIds
+  }, [messageIds, messages.length])
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleMessageIdSignature ? visibleMessageIdSignature.split('|') : [])
+
+    setTypingNpcMessageIds(prev => {
+      let changed = false
+      const next: Record<string, boolean> = {}
+
+      for (const id of Object.keys(prev)) {
+        if (visibleIds.has(id)) {
+          next[id] = true
+        } else {
+          changed = true
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [visibleMessageIdSignature])
+
+  useEffect(() => {
+    if (visibleMessageCount >= messages.length) {
+      return
+    }
+
+    const messageToReveal = messages[visibleMessageCount]
+    const delay = getMessageRevealDelay(messageToReveal, visibleMessageCount === 0)
+    const timer = window.setTimeout(() => {
+      setVisibleMessageCount(prev => Math.min(messages.length, prev + 1))
+    }, messageToReveal?.isStreaming ? 40 : delay)
+
+    return () => window.clearTimeout(timer)
+  }, [nextMessageRevealKey, messages.length, visibleMessageCount])
+
+  useLayoutEffect(() => {
+    scrollToBottom()
+
+    return () => {
+      if (scrollFrame.current !== null) {
+        window.cancelAnimationFrame(scrollFrame.current)
+        scrollFrame.current = null
+      }
+    }
+  }, [messageSignature, messages.length, visibleMessageCount, isLoading, scrollToBottom])
+
+  useLayoutEffect(() => {
+    scrollToBottom()
+  }, [visibleContentSignature, scrollToBottom])
+
+  const hasHiddenMessages = visibleMessageCount < messages.length
+  const hasTypingNpcMessages = Object.keys(typingNpcMessageIds).length > 0
+  const hasVisibleStreamingMessage = messages
+    .slice(0, visibleMessageCount)
+    .some(msg => msg.isStreaming)
+
+  useEffect(() => {
+    onTypingChange?.(hasHiddenMessages || hasTypingNpcMessages)
+  }, [hasHiddenMessages, hasTypingNpcMessages, onTypingChange])
 
   return (
     <div style={styles.container}>
       <div style={styles.locationBar}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="#f7a26a">
-          <path d="M7 1C4.8 1 3 2.8 3 5c0 3.5 4 8 4 8s4-4.5 4-8c0-2.2-1.8-4-4-4zm0 5.5A1.5 1.5 0 1 1 7 3.5 1.5 1.5 0 0 1 7 6.5z"/>
-        </svg>
-        <span style={styles.locationText}>{node?.location ?? '未知地点'}</span>
+        <div style={styles.locationLeft}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="#2dd4bf">
+            <path d="M7 1C4.8 1 3 2.8 3 5c0 3.5 4 8 4 8s4-4.5 4-8c0-2.2-1.8-4-4-4zm0 5.5A1.5 1.5 0 1 1 7 3.5 1.5 1.5 0 0 1 7 6.5z"/>
+          </svg>
+          <span style={styles.locationText}>{node?.location ?? '未知地点'}</span>
+        </div>
         <span style={styles.nodeTitle}>{node?.title ?? ''}</span>
       </div>
 
       <div style={styles.scrollArea} ref={scrollRef}>
+        <div style={styles.scenePanel}>
+          {sceneImageUrl ? (
+            <img src={sceneImageUrl} alt={node?.title ?? '当前场景'} style={styles.sceneImage} />
+          ) : (
+            <div style={styles.scenePlaceholder}>
+              <div style={styles.sceneTitle}>{node?.title ?? '校园场景'}</div>
+              <div style={styles.scenePrompt}>{node?.imagePrompt ?? '关键剧情场景图将在这里展示。'}</div>
+            </div>
+          )}
+        </div>
+
         {messages.length === 0 && node && (
           <div style={styles.narrationBox}>
-            <p style={styles.narrationText}>{node.description}</p>
+            <div style={styles.narrationKicker}>旁白</div>
+            <p style={styles.narrationText}>正在进入场景...</p>
           </div>
         )}
 
-        {messages.map(msg => (
-          <div
+        {messages.slice(0, visibleMessageCount).map(msg => (
+          <MessageItem
             key={msg.id}
-            style={{
-              ...styles.messageRow,
-              justifyContent: msg.role === 'player' ? 'flex-end' : 'flex-start'
-            }}
-          >
-            {msg.role === 'narration' && (
-              <div style={styles.narrationBox}>
-                <p style={styles.narrationText}>{msg.content}</p>
-              </div>
-            )}
-
-            {msg.role === 'player' && (
-              <div style={styles.playerBubble}>
-                <p style={styles.playerText}>{msg.content}</p>
-              </div>
-            )}
-
-            {msg.role === 'npc' && (
-              <div style={styles.npcBubble}>
-                <div style={styles.npcAvatarSmall}>
-                  <span style={styles.npcInitial}>
-                    {msg.npcId === 'xuejie' ? '学' : '?'}
-                  </span>
-                </div>
-                <div>
-                  <div style={styles.npcName}>
-                    {msg.npcId === 'xuejie' ? '的学姐' : 'NPC'}
-                  </div>
-                  <div style={styles.npcBubbleText}>
-                    <p style={styles.npcText}>{msg.content}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+            msg={msg}
+            onNpcTypingChange={handleNpcTypingChange}
+            onNpcTypingTick={handleNpcTypingTick}
+          />
         ))}
 
-        {latestNarration && messages.filter(m => m.role === 'narration').length > 1 && (
-          <div style={styles.narrationBox}>
-            <p style={styles.narrationText}>{latestNarration.content}</p>
-          </div>
-        )}
-
-        {isLoading && (
+        {isLoading && !hasVisibleStreamingMessage && !hasTypingNpcMessages && (
           <div style={styles.loadingRow}>
             <div style={styles.loadingDots}>
               <span style={{...styles.dot, animationDelay: '0ms'}} />
@@ -90,9 +219,172 @@ export default function DialogueBox({ node, messages, isLoading }: DialogueBoxPr
             </div>
           </div>
         )}
+        <div ref={bottomRef} style={styles.bottomAnchor} />
       </div>
     </div>
   )
+}
+
+const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTypingTick }: MessageItemProps) {
+  const [displayedNpcContent, setDisplayedNpcContent] = useState(() => getInitialNpcDisplayedContent(msg))
+  const npcFullChars = useMemo(() => msg.role === 'npc' ? Array.from(msg.content) : [], [msg.content, msg.role])
+  const displayedNpcChars = useMemo(
+    () => msg.role === 'npc' ? Array.from(displayedNpcContent) : [],
+    [displayedNpcContent, msg.role]
+  )
+  const isNpcTyping = msg.role === 'npc' && (msg.isStreaming || displayedNpcChars.length < npcFullChars.length)
+
+  useEffect(() => {
+    if (msg.role !== 'npc') {
+      return
+    }
+
+    return () => onNpcTypingChange(msg.id, false)
+  }, [msg.id, msg.role, onNpcTypingChange])
+
+  useEffect(() => {
+    if (msg.role !== 'npc') {
+      return
+    }
+
+    onNpcTypingChange(msg.id, isNpcTyping)
+  }, [isNpcTyping, msg.id, msg.role, onNpcTypingChange])
+
+  useEffect(() => {
+    if (msg.role !== 'npc' || !displayedNpcContent) {
+      return
+    }
+
+    if (!msg.content.startsWith(displayedNpcContent)) {
+      setDisplayedNpcContent(msg.content)
+      onNpcTypingTick()
+    }
+  }, [displayedNpcContent, msg.content, msg.role, onNpcTypingTick])
+
+  useEffect(() => {
+    if (msg.role !== 'npc' || displayedNpcChars.length >= npcFullChars.length) {
+      return
+    }
+
+    const nextChar = npcFullChars[displayedNpcChars.length] ?? ''
+    const step = getNpcTypewriterStep(npcFullChars.length, displayedNpcChars.length)
+    const timer = window.setTimeout(() => {
+      const nextLength = Math.min(npcFullChars.length, displayedNpcChars.length + step)
+      setDisplayedNpcContent(npcFullChars.slice(0, nextLength).join(''))
+      onNpcTypingTick()
+    }, getNpcTypewriterDelay(nextChar))
+
+    return () => window.clearTimeout(timer)
+  }, [displayedNpcChars.length, msg.role, npcFullChars, onNpcTypingTick])
+
+  const shouldShowNpcCursor = msg.role === 'npc' && (msg.isStreaming || displayedNpcChars.length < npcFullChars.length)
+
+  return (
+    <div
+      style={{
+        ...styles.messageRow,
+        ...(msg.role === 'player' ? styles.playerMessageRow : styles.leftMessageRow)
+      }}
+    >
+      {msg.role === 'narration' && (
+        <div style={styles.narrationBox}>
+          <div style={styles.narrationKicker}>旁白</div>
+          <p style={styles.narrationText}>{msg.content}</p>
+        </div>
+      )}
+
+      {msg.role === 'player' && (
+        <div style={styles.playerBubble}>
+          <p style={styles.playerText}>{msg.content}</p>
+        </div>
+      )}
+
+      {msg.role === 'npc' && (
+        <div style={styles.npcBubble}>
+          <div style={styles.npcAvatarSmall}>
+            <span style={styles.npcInitial}>
+              {getNPCInitial(msg.npcId)}
+            </span>
+          </div>
+          <div>
+            <div style={styles.npcName}>
+              {getNPCDisplayName(msg.npcId)}
+            </div>
+            <div style={{ ...styles.npcBubbleText, ...(msg.isStreaming ? styles.npcBubbleStreaming : {}) }}>
+              <p style={styles.npcText}>
+                {displayedNpcContent || (msg.isStreaming ? '思考中' : '')}
+                {shouldShowNpcCursor && <span style={styles.streamCursor} />}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {msg.role === 'education' && msg.educationCard && (
+        <div style={styles.educationCard}>
+          <div style={styles.educationHeader}>
+            <span style={styles.educationCategory}>{msg.educationCard.category}</span>
+            <span style={styles.educationTitle}>{msg.educationCard.title}</span>
+          </div>
+          <p style={styles.educationBody}>{msg.educationCard.body}</p>
+          <div style={styles.educationChecklist}>
+            {msg.educationCard.checklist.map(item => (
+              <div key={item} style={styles.educationChecklistItem}>
+                <span style={styles.educationCheck}>✓</span>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+          <p style={styles.educationAction}>{msg.educationCard.campusAction}</p>
+        </div>
+      )}
+
+      {msg.role === 'system' && (
+        <div style={styles.systemBox}>
+          {msg.content}
+        </div>
+      )}
+    </div>
+  )
+})
+
+function getInitialNpcDisplayedContent(msg: ConversationMessage): string {
+  if (msg.role !== 'npc' || msg.isStreaming) {
+    return ''
+  }
+
+  const messageAge = Date.now() - msg.timestamp
+  return messageAge > NPC_TYPEWRITER_RECENT_WINDOW_MS ? msg.content : ''
+}
+
+function getNpcTypewriterDelay(nextChar: string): number {
+  if (nextChar === '\n') {
+    return 90
+  }
+
+  if ('。！？!?；;'.includes(nextChar)) {
+    return 110
+  }
+
+  if ('，、,.：:'.includes(nextChar)) {
+    return 52
+  }
+
+  return NPC_TYPEWRITER_BASE_DELAY
+}
+
+function getNpcTypewriterStep(totalChars: number, displayedChars: number): number {
+  const remainingChars = totalChars - displayedChars
+
+  if (remainingChars > 120) {
+    return 3
+  }
+
+  if (remainingChars > 60) {
+    return 2
+  }
+
+  return 1
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -100,61 +392,125 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
-    background: 'rgba(26,26,46,0.6)',
-    borderRadius: '16px',
-    border: '1px solid #2a2a4c',
+    background: 'rgba(8,13,24,0.68)',
+    borderRadius: '12px',
+    border: '1px solid rgba(148,163,184,0.18)',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.34)',
     overflow: 'hidden',
-    minHeight: 0
+    minHeight: 0,
+    backdropFilter: 'blur(14px)'
   },
   locationBar: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '12px 20px',
-    background: 'rgba(37,37,64,0.8)',
-    borderBottom: '1px solid #2a2a4c',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '10px 18px',
+    background: 'linear-gradient(90deg, rgba(8,13,24,0.98), rgba(15,23,42,0.88))',
+    borderBottom: '1px solid rgba(148,163,184,0.14)',
     fontSize: '13px'
   },
+  locationLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    minWidth: 0
+  },
   locationText: {
-    color: '#f7a26a',
-    fontWeight: 500
+    color: '#99f6e4',
+    fontWeight: 700
   },
   nodeTitle: {
-    color: '#9898b0',
-    marginLeft: 'auto',
-    fontSize: '12px'
+    color: '#cbd5e1',
+    fontSize: '12px',
+    padding: '4px 8px',
+    borderRadius: '8px',
+    background: 'rgba(15,23,42,0.58)',
+    border: '1px solid rgba(148,163,184,0.12)'
   },
   scrollArea: {
     flex: 1,
     overflowY: 'auto' as const,
-    padding: '20px',
+    padding: '16px 18px 22px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '12px'
+    gap: '14px'
+  },
+  scenePanel: {
+    width: '100%',
+    minHeight: '168px',
+    borderRadius: '10px',
+    overflow: 'hidden',
+    border: '1px solid rgba(45,212,191,0.16)',
+    background: 'linear-gradient(135deg, rgba(6,78,59,0.36), rgba(30,64,175,0.18), rgba(15,23,42,0.92))',
+    boxShadow: 'inset 0 -48px 80px rgba(2,6,23,0.4)',
+    flexShrink: 0
+  },
+  sceneImage: {
+    width: '100%',
+    height: '210px',
+    objectFit: 'cover'
+  },
+  scenePlaceholder: {
+    padding: '26px 28px',
+    minHeight: '168px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: '10px'
+  },
+  sceneTitle: {
+    color: '#f8fafc',
+    fontSize: '24px',
+    fontWeight: 900
+  },
+  scenePrompt: {
+    color: '#cbd5e1',
+    fontSize: '13px',
+    lineHeight: 1.75,
+    maxWidth: '780px'
   },
   narrationBox: {
-    background: 'rgba(124,106,247,0.08)',
-    borderRadius: '12px',
-    padding: '14px 18px',
-    border: '1px solid rgba(124,106,247,0.12)',
-    maxWidth: '85%'
+    background: 'linear-gradient(135deg, rgba(96,165,250,0.1), rgba(15,23,42,0.78))',
+    borderRadius: '10px',
+    padding: '15px 18px',
+    border: '1px solid rgba(96,165,250,0.18)',
+    maxWidth: '92%',
+    boxShadow: '0 8px 20px rgba(0,0,0,0.14)',
+    animation: 'fadeIn 0.24s ease-out'
+  },
+  narrationKicker: {
+    color: '#93c5fd',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '1px',
+    marginBottom: '6px'
   },
   narrationText: {
     fontSize: '15px',
-    color: '#c8c8e0',
+    color: '#dbeafe',
     lineHeight: 1.8,
-    fontStyle: 'italic'
+    fontStyle: 'italic',
+    whiteSpace: 'pre-wrap'
   },
   messageRow: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: '10px'
+    gap: '10px',
+    animation: 'messageReveal 0.52s ease-out both'
+  },
+  leftMessageRow: {
+    justifyContent: 'flex-start'
+  },
+  playerMessageRow: {
+    justifyContent: 'flex-end'
   },
   playerBubble: {
-    background: 'linear-gradient(135deg, #7c6af7 0%, #5a4bbf 100%)',
-    borderRadius: '16px 16px 4px 16px',
+    background: 'linear-gradient(135deg, rgba(37,99,235,0.95), rgba(20,184,166,0.92))',
+    borderRadius: '14px 14px 4px 14px',
     padding: '12px 16px',
-    maxWidth: '70%'
+    maxWidth: '70%',
+    boxShadow: '0 12px 28px rgba(20,184,166,0.14)'
   },
   playerText: {
     fontSize: '15px',
@@ -165,13 +521,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'flex-start',
     gap: '10px',
-    maxWidth: '75%'
+    maxWidth: '78%'
   },
   npcAvatarSmall: {
     width: '38px',
     height: '38px',
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #f7a26a 0%, #e8825a 100%)',
+    background: 'linear-gradient(135deg, #f59e0b 0%, #38bdf8 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -184,20 +540,103 @@ const styles: Record<string, React.CSSProperties> = {
   },
   npcName: {
     fontSize: '12px',
-    color: '#f7a26a',
+    color: '#fbbf24',
     marginBottom: '4px',
     fontWeight: 500
   },
   npcBubbleText: {
-    background: 'rgba(37,37,64,0.9)',
-    borderRadius: '16px 16px 16px 4px',
-    padding: '12px 16px',
-    border: '1px solid #3a3a5c'
+    background: 'rgba(15,23,42,0.9)',
+    borderRadius: '14px 14px 14px 4px',
+    padding: '13px 16px',
+    border: '1px solid rgba(148,163,184,0.18)',
+    boxShadow: '0 12px 30px rgba(0,0,0,0.18)'
+  },
+  npcBubbleStreaming: {
+    border: '1px solid rgba(45,212,191,0.28)',
+    boxShadow: '0 0 0 1px rgba(45,212,191,0.06), 0 10px 24px rgba(20,184,166,0.08)'
   },
   npcText: {
     fontSize: '15px',
     color: '#e8e8f0',
-    lineHeight: 1.7
+    lineHeight: 1.7,
+    whiteSpace: 'pre-wrap'
+  },
+  streamCursor: {
+    display: 'inline-block',
+    width: '7px',
+    height: '1.15em',
+    marginLeft: '3px',
+    verticalAlign: '-0.18em',
+    borderRadius: '2px',
+    background: '#5eead4',
+    animation: 'pulse 0.9s ease-in-out infinite'
+  },
+  educationCard: {
+    width: 'min(760px, 92%)',
+    background: 'linear-gradient(135deg, rgba(45,212,191,0.1), rgba(15,23,42,0.88))',
+    border: '1px solid rgba(45,212,191,0.24)',
+    borderRadius: '10px',
+    padding: '16px 18px',
+    boxShadow: '0 10px 28px rgba(0,0,0,0.18)'
+  },
+  educationHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '8px'
+  },
+  educationCategory: {
+    padding: '3px 8px',
+    borderRadius: '8px',
+    background: 'rgba(45,212,191,0.16)',
+    color: '#5eead4',
+    fontSize: '11px',
+    fontWeight: 700
+  },
+  educationTitle: {
+    color: '#e8e8f0',
+    fontSize: '15px',
+    fontWeight: 700
+  },
+  educationBody: {
+    color: '#c8c8e0',
+    fontSize: '14px',
+    lineHeight: 1.75,
+    marginBottom: '10px'
+  },
+  educationChecklist: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+    gap: '8px',
+    marginBottom: '10px'
+  },
+  educationChecklistItem: {
+    display: 'flex',
+    gap: '7px',
+    color: '#d8d8ef',
+    fontSize: '13px',
+    lineHeight: 1.5
+  },
+  educationCheck: {
+    color: '#5eead4',
+    fontWeight: 800
+  },
+  educationAction: {
+    color: '#9ca3af',
+    fontSize: '12px',
+    lineHeight: 1.6,
+    borderTop: '1px solid rgba(255,255,255,0.08)',
+    paddingTop: '9px'
+  },
+  systemBox: {
+    maxWidth: '88%',
+    background: 'rgba(251,191,36,0.1)',
+    border: '1px solid rgba(251,191,36,0.22)',
+    borderRadius: '12px',
+    padding: '12px 14px',
+    color: '#fef3c7',
+    fontSize: '13px',
+    lineHeight: 1.6
   },
   loadingRow: {
     display: 'flex',
@@ -216,5 +655,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     background: '#7c6af7',
     animation: 'pulse 1.2s ease-in-out infinite'
+  },
+  bottomAnchor: {
+    width: '100%',
+    height: '1px',
+    flexShrink: 0
   }
 }

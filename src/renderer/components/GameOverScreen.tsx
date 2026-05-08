@@ -1,230 +1,270 @@
 import React from 'react'
 import type { GameState } from '../../data/types'
+import { createEndingReport, getEndingLevelColor } from '../../engine/ending'
 
 interface GameOverScreenProps {
   gameState: GameState
   onRetry: () => void
 }
 
-const getEnding = (state: GameState): { title: string; description: string; level: 'good' | 'normal' | 'bad' } => {
-  const { playerStatus, npcAffection } = state
-  const avgAffection = Object.values(npcAffection).reduce((a, b) => a + b, 0) / Math.max(1, Object.keys(npcAffection).length)
-  const overall = (playerStatus.gpa / 4) * 40 + (playerStatus.reputation / 100) * 30 + (avgAffection / 100) * 30
-
-  if (overall >= 80) {
-    return {
-      title: '校园风云人物',
-      description: '你在学业、社交和感情方面都取得了巨大成功。学姐对你的评价非常高，同学们也对你刮目相看。你已经成为校园里的风云人物！',
-      level: 'good'
-    }
-  } else if (overall >= 50) {
-    return {
-      title: '平淡是真',
-      description: '你的大学生活波澜不惊，但也收获了不少。学姐觉得你是个不错的学弟，偶尔会主动和你打招呼。继续保持吧！',
-      level: 'normal'
-    }
-  } else {
-    return {
-      title: '危机四伏',
-      description: '你的校园生活遇到了不少麻烦。学业下滑、社交受挫，学姐也对你有些失望。是时候反思一下，做出改变了。',
-      level: 'bad'
-    }
-  }
-}
-
-const LEVEL_COLORS = {
-  good: { primary: '#4ade80', secondary: '#166534', text: '#dcfce7' },
-  normal: { primary: '#fbbf24', secondary: '#92400e', text: '#fef9c3' },
-  bad: { primary: '#f87171', secondary: '#991b1b', text: '#fee2e2' }
-}
-
 export default function GameOverScreen({ gameState, onRetry }: GameOverScreenProps) {
-  const ending = getEnding(gameState)
-  const colors = LEVEL_COLORS[ending.level]
+  const report = createEndingReport(gameState)
+  const color = getEndingLevelColor(report.level)
+  const compact = typeof window !== 'undefined' && window.innerWidth < 760
 
   return (
     <div style={styles.container}>
+      <div style={styles.backdrop} />
       <div style={styles.card}>
-        <div style={{ ...styles.levelBadge, background: `${colors.primary}20`, border: `1px solid ${colors.primary}40` }}>
-          <span style={{ color: colors.primary }}>第一幕 完</span>
+        <div style={{ ...styles.levelBadge, background: `${color}20`, border: `1px solid ${color}40`, color }}>
+          {report.typeLabel}
         </div>
 
-        <h1 style={styles.title}>{ending.title}</h1>
-        <p style={styles.description}>{ending.description}</p>
+        <h1 style={styles.title}>{report.title}</h1>
+        <p style={styles.description}>{report.description}</p>
 
-        <div style={styles.statsGrid}>
-          <div style={styles.statBox}>
-            <div style={styles.statLabel}>GPA</div>
-            <div style={{...styles.statValue, color: colors.primary}}>
-              {gameState.playerStatus.gpa.toFixed(2)}
-            </div>
-          </div>
-          <div style={styles.statBox}>
-            <div style={styles.statLabel}>金钱</div>
-            <div style={{...styles.statValue, color: colors.primary}}>
-              ¥{gameState.playerStatus.money}
-            </div>
-          </div>
-          <div style={styles.statBox}>
-            <div style={styles.statLabel}>社交</div>
-            <div style={{...styles.statValue, color: colors.primary}}>
-              {gameState.playerStatus.social}
-            </div>
-          </div>
-          <div style={styles.statBox}>
-            <div style={styles.statLabel}>声誉</div>
-            <div style={{...styles.statValue, color: colors.primary}}>
-              {gameState.playerStatus.reputation}
-            </div>
-          </div>
+        <div style={styles.tagRow}>
+          {report.routeTags.map(tag => <span key={tag} style={styles.routeTag}>{tag}</span>)}
         </div>
 
-        <div style={styles.affectionBox}>
-          <span style={styles.affectionLabel}>学姐好感度</span>
-          <div style={styles.affectionBar}>
-            <div
-              style={{
-                ...styles.affectionFill,
-                width: `${gameState.npcAffection.xuejie ?? 50}%`,
-                background: colors.primary
-              }}
-            />
-          </div>
-          <span style={{ color: colors.primary, fontWeight: 700 }}>
-            {gameState.npcAffection.xuejie ?? 50}
+        <div style={styles.statusFlag}>
+          <span style={styles.flagLabel}>是否被骗</span>
+          <span style={{ ...styles.flagValue, color: report.scammed ? '#f87171' : '#4ade80' }}>
+            {report.scammed ? '是' : '否'}
           </span>
         </div>
 
-        <button
-          onClick={onRetry}
-          style={styles.retryButton}
-          onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateY(-2px)'
-            e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,106,247,0.3)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.transform = 'translateY(0)'
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(124,106,247,0.2)'
-          }}
-        >
-          重新开始
-        </button>
+        <div style={{ ...styles.statsGrid, ...(compact ? styles.statsGridCompact : {}) }}>
+          <Stat label="GPA" value={gameState.playerStatus.gpa.toFixed(2)} color={color} />
+          <Stat label="金钱" value={`¥${gameState.playerStatus.money}`} color={color} />
+          <Stat label="社交" value={`${gameState.playerStatus.social}`} color={color} />
+          <Stat label="心情" value={`${gameState.playerStatus.mood}`} color={color} />
+          <Stat label="反诈意识" value={`${gameState.playerStatus.antiFraudAwareness}`} color={color} />
+        </div>
 
-        <p style={styles.footnote}>
-          AI 校园生存模拟器 v1.0 — 第一幕迎新周已完结
-        </p>
+        <InfoBox title="成长报告" text={report.growthSummary} tone="purple" />
+        <InfoBox title="关键 NPC 评价" text={report.npcReview} tone="purple" />
+        <InfoBox title="本局踩坑提示" text={report.pitfallTip} tone="teal" />
+
+        <div style={{ ...styles.grid, ...(compact ? styles.gridCompact : {}) }}>
+          <ListBox title="新生手册建议" items={report.handbookAdvice} />
+          <ListBox title="下一步建议" items={report.nextActions} />
+        </div>
+
+        <div style={styles.contactBox}>
+          <div style={styles.boxTitle}>学校求助入口</div>
+          {report.schoolContacts.map(contact => (
+            <div key={contact.id} style={styles.contactItem}>
+              <span>{contact.label}</span>
+              <strong>{contact.value}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.actions}>
+          <button onClick={onRetry} style={styles.retryButton}>返回首页</button>
+        </div>
+
+        <p style={styles.footnote}>AI 校园生存模拟器 v2.0 - 新生入学教育原型</p>
       </div>
+    </div>
+  )
+}
+
+function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={styles.statBox}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={{ ...styles.statValue, color }}>{value}</div>
+    </div>
+  )
+}
+
+function InfoBox({ title, text, tone }: { title: string; text: string; tone: 'purple' | 'teal' }) {
+  return (
+    <div style={tone === 'purple' ? styles.reviewBox : styles.tipBox}>
+      <div style={tone === 'purple' ? styles.reviewTitle : styles.tipTitle}>{title}</div>
+      <p style={styles.infoText}>{text}</p>
+    </div>
+  )
+}
+
+function ListBox({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div style={styles.listBox}>
+      <div style={styles.boxTitle}>{title}</div>
+      {items.map(item => <div key={item} style={styles.listItem}>{item}</div>)}
     </div>
   )
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
     width: '100vw',
-    background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 70%)',
+    background: 'radial-gradient(circle at 26% 18%, rgba(20,184,166,0.16), transparent 30%), radial-gradient(circle at 78% 12%, rgba(96,165,250,0.16), transparent 32%), linear-gradient(135deg, #06121f 0%, #0c1b2b 52%, #101827 100%)',
     padding: '20px'
   },
+  backdrop: {
+    position: 'fixed',
+    inset: 0,
+    pointerEvents: 'none',
+    opacity: 0.16,
+    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)',
+    backgroundSize: '44px 44px'
+  },
   card: {
+    position: 'relative',
+    zIndex: 1,
     width: '100%',
-    maxWidth: '560px',
-    background: 'linear-gradient(145deg, #1a1a2e 0%, #16162a 100%)',
-    borderRadius: '20px',
-    border: '1px solid #2a2a4c',
-    padding: '40px',
-    textAlign: 'center' as const,
-    boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+    maxWidth: '820px',
+    maxHeight: '94vh',
+    overflowY: 'auto',
+    background: 'linear-gradient(145deg, rgba(15,23,42,0.92), rgba(8,13,24,0.92))',
+    borderRadius: '12px',
+    border: '1px solid rgba(148,163,184,0.18)',
+    padding: '30px',
+    textAlign: 'center',
+    boxShadow: '0 24px 72px rgba(0,0,0,0.42)',
+    backdropFilter: 'blur(16px)'
   },
   levelBadge: {
     display: 'inline-block',
     padding: '6px 16px',
-    borderRadius: '20px',
+    borderRadius: '12px',
     fontSize: '13px',
-    fontWeight: 600,
-    marginBottom: '20px',
+    fontWeight: 800,
+    marginBottom: '14px',
     letterSpacing: '1px'
   },
   title: {
-    fontSize: '36px',
-    fontWeight: 800,
-    color: '#e8e8f0',
-    marginBottom: '16px',
-    letterSpacing: '2px'
+    fontSize: '34px',
+    fontWeight: 900,
+    color: '#f8fafc',
+    marginBottom: '10px'
   },
   description: {
     fontSize: '15px',
-    color: '#9898b0',
+    color: '#cbd5e1',
     lineHeight: 1.8,
-    marginBottom: '32px'
+    marginBottom: '14px'
   },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '12px',
-    marginBottom: '20px'
-  },
-  statBox: {
-    background: 'rgba(37,37,64,0.6)',
-    borderRadius: '10px',
-    padding: '12px 8px',
-    border: '1px solid #2a2a4c'
-  },
-  statLabel: {
-    fontSize: '11px',
-    color: '#9898b0',
-    marginBottom: '6px',
-    textTransform: 'uppercase' as const
-  },
-  statValue: {
-    fontSize: '18px',
-    fontWeight: 700
-  },
-  affectionBox: {
+  tagRow: {
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: '12px',
-    marginBottom: '32px',
-    padding: '12px 20px',
-    background: 'rgba(37,37,64,0.4)',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '14px'
+  },
+  routeTag: {
+    padding: '5px 9px',
+    borderRadius: '8px',
+    background: 'rgba(45,212,191,0.12)',
+    color: '#99f6e4',
+    fontSize: '12px',
+    fontWeight: 800
+  },
+  statusFlag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 14px',
     borderRadius: '10px',
-    border: '1px solid #2a2a4c'
-  },
-  affectionLabel: {
-    fontSize: '14px',
-    color: '#f7a26a',
-    fontWeight: 500
-  },
-  affectionBar: {
-    flex: 1,
-    maxWidth: '200px',
-    height: '8px',
-    background: 'rgba(255,255,255,0.08)',
-    borderRadius: '4px',
-    overflow: 'hidden'
-  },
-  affectionFill: {
-    height: '100%',
-    borderRadius: '4px',
-    transition: 'width 0.5s ease'
-  },
-  retryButton: {
-    padding: '14px 40px',
-    background: 'linear-gradient(135deg, #7c6af7 0%, #5a4bbf 100%)',
-    color: '#fff',
-    borderRadius: '10px',
-    fontSize: '16px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    boxShadow: '0 4px 16px rgba(124,106,247,0.2)',
-    transition: 'all 0.2s ease',
+    background: 'rgba(37,37,64,0.7)',
+    border: '1px solid #2a2a4c',
     marginBottom: '16px'
   },
-  footnote: {
+  flagLabel: { color: '#9898b0', fontSize: '13px' },
+  flagValue: { fontSize: '15px', fontWeight: 800 },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: '10px',
+    marginBottom: '16px'
+  },
+  statsGridCompact: {
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))'
+  },
+  statBox: {
+    background: 'rgba(30,41,59,0.66)',
+    borderRadius: '10px',
+    padding: '12px 8px',
+    border: '1px solid rgba(148,163,184,0.14)'
+  },
+  statLabel: { fontSize: '11px', color: '#9898b0', marginBottom: '6px' },
+  statValue: { fontSize: '18px', fontWeight: 800 },
+  reviewBox: {
+    textAlign: 'left',
+    padding: '13px 15px',
+    background: 'rgba(96,165,250,0.08)',
+    border: '1px solid rgba(96,165,250,0.18)',
+    borderRadius: '10px',
+    marginBottom: '10px'
+  },
+  tipBox: {
+    textAlign: 'left',
+    padding: '13px 15px',
+    background: 'rgba(45,212,191,0.08)',
+    border: '1px solid rgba(45,212,191,0.18)',
+    borderRadius: '10px',
+    marginBottom: '14px'
+  },
+  reviewTitle: { color: '#93c5fd', fontSize: '13px', fontWeight: 800, marginBottom: '6px' },
+  tipTitle: { color: '#2dd4bf', fontSize: '13px', fontWeight: 800, marginBottom: '6px' },
+  infoText: { color: '#d8d8ef', fontSize: '14px', lineHeight: 1.7 },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '12px',
+    marginBottom: '12px'
+  },
+  gridCompact: {
+    gridTemplateColumns: '1fr'
+  },
+  listBox: {
+    textAlign: 'left',
+    background: 'rgba(30,41,59,0.58)',
+    border: '1px solid rgba(148,163,184,0.14)',
+    borderRadius: '10px',
+    padding: '13px 15px'
+  },
+  boxTitle: { color: '#e8e8f0', fontSize: '13px', fontWeight: 800, marginBottom: '8px' },
+  listItem: {
+    color: '#c8c8e0',
     fontSize: '12px',
-    color: '#5a5a7a'
-  }
+    lineHeight: 1.55,
+    padding: '4px 0',
+    borderTop: '1px solid rgba(255,255,255,0.05)'
+  },
+  contactBox: {
+    textAlign: 'left',
+    background: 'rgba(15,23,42,0.48)',
+    border: '1px solid rgba(148,163,184,0.14)',
+    borderRadius: '10px',
+    padding: '13px 15px',
+    marginBottom: '16px'
+  },
+  contactItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '12px',
+    color: '#94a3b8',
+    fontSize: '12px',
+    padding: '5px 0',
+    borderTop: '1px solid rgba(255,255,255,0.05)'
+  },
+  actions: { display: 'flex', justifyContent: 'center', marginBottom: '10px' },
+  retryButton: {
+    padding: '12px 34px',
+    background: 'linear-gradient(135deg, #14b8a6 0%, #2563eb 100%)',
+    color: '#fff',
+    borderRadius: '10px',
+    fontSize: '15px',
+    fontWeight: 800
+  },
+  footnote: { fontSize: '12px', color: '#5a5a7a' }
 }

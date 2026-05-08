@@ -3,6 +3,8 @@ import React, { useState } from 'react'
 interface ActIntroProps {
   actNumber: number
   onContinue: () => void
+  hasAutosave?: boolean
+  onLoadAutosave?: () => void
 }
 
 const ACT_TITLES: Record<number, { cn: string; en: string; bg: string }> = {
@@ -13,7 +15,12 @@ const ACT_TITLES: Record<number, { cn: string; en: string; bg: string }> = {
   }
 }
 
-export default function ActIntro({ actNumber, onContinue }: ActIntroProps) {
+export default function ActIntro({
+  actNumber,
+  onContinue,
+  hasAutosave = false,
+  onLoadAutosave
+}: ActIntroProps) {
   const [visible, setVisible] = useState(false)
   const actInfo = ACT_TITLES[actNumber] || ACT_TITLES[1]
 
@@ -45,27 +52,36 @@ export default function ActIntro({ actNumber, onContinue }: ActIntroProps) {
           <svg width="14" height="14" viewBox="0 0 14 14" fill="#7c6af7">
             <path d="M7 1C3.7 1 1 3.7 1 7s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10.5A4.5 4.5 0 1 1 7 2.5 4.5 4.5 0 0 1 7 11.5zM7 5h.5v3H7V5zm0 4h.5v1.5H7V9z"/>
           </svg>
-          <span>每一个选择都会影响你的 GPA、社交和命运</span>
+          <span>每一个选择都会影响学习、关系、状态与风险判断</span>
         </div>
       </div>
 
-      <button
-        onClick={onContinue}
-        style={styles.startButton}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'scale(1.02)'
-          e.currentTarget.style.boxShadow = '0 8px 32px rgba(124,106,247,0.4)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'scale(1)'
-          e.currentTarget.style.boxShadow = '0 4px 20px rgba(124,106,247,0.3)'
-        }}
-      >
-        开始旅程
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="#fff" style={{ marginLeft: 8 }}>
-          <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
+      <div style={styles.actions}>
+        <button
+          onClick={onContinue}
+          style={styles.startButton}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'scale(1.02)'
+            e.currentTarget.style.boxShadow = '0 8px 32px rgba(124,106,247,0.4)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(124,106,247,0.3)'
+          }}
+        >
+          开始旅程
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#fff" style={{ marginLeft: 8 }}>
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+
+        {hasAutosave && onLoadAutosave && (
+          <button onClick={onLoadAutosave} style={styles.secondaryButton}>
+            继续存档
+          </button>
+        )}
+      </div>
+
     </div>
   )
 }
@@ -128,7 +144,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#7c6af7'
   },
   startButton: {
-    marginTop: '48px',
     display: 'flex',
     alignItems: 'center',
     padding: '16px 40px',
@@ -141,5 +156,20 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     letterSpacing: '1px'
-  }
+  },
+  actions: {
+    marginTop: '42px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  secondaryButton: {
+    padding: '14px 28px',
+    background: 'rgba(37,37,64,0.9)',
+    color: '#e8e8f0',
+    borderRadius: '12px',
+    border: '1px solid #3a3a5c',
+    fontSize: '15px',
+    fontWeight: 600
+  },
 }

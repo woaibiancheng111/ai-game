@@ -1,14 +1,34 @@
 import React, { useEffect, useState } from 'react'
+import type { AuthSession, DbHealth, PlayerProfile } from '../../data/types'
+
+type LoginTab = 'account' | 'guest'
 
 interface SetupScreenProps {
-  onSubmit: (apiKey: string, playerName: string) => void
+  onSubmit: (apiKey: string, playerName: string, profile?: PlayerProfile | null, session?: AuthSession | null) => void
   initialApiKey?: string
   initialPlayerName?: string
+  profiles?: PlayerProfile[]
+  currentProfileId?: string
+  onProfileSelect?: (profileId: string) => void
+  dbHealth?: DbHealth | null
 }
 
-export default function SetupScreen({ onSubmit, initialApiKey = '', initialPlayerName = '' }: SetupScreenProps) {
+export default function SetupScreen({
+  onSubmit,
+  initialApiKey = '',
+  initialPlayerName = '',
+  profiles = [],
+  currentProfileId,
+  onProfileSelect,
+  dbHealth
+}: SetupScreenProps) {
+  const [activeTab, setActiveTab] = useState<LoginTab>('account')
   const [playerName, setPlayerName] = useState(initialPlayerName)
   const [apiKey, setApiKey] = useState(initialApiKey)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState(initialPlayerName)
+  const [isRegistering, setIsRegistering] = useState(false)
   const [apiKeyDetected, setApiKeyDetected] = useState(Boolean(initialApiKey.trim()))
   const [error, setError] = useState('')
   const [testing, setTesting] = useState(false)
@@ -23,46 +43,92 @@ export default function SetupScreen({ onSubmit, initialApiKey = '', initialPlaye
   useEffect(() => {
     if (initialPlayerName.trim()) {
       setPlayerName(initialPlayerName)
+      setDisplayName(initialPlayerName)
     }
   }, [initialPlayerName])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!playerName.trim()) {
-      setError('请输入你的姓名')
-      return
-    }
-
+  const validateApiKey = async () => {
     if (!apiKey.trim()) {
       setError('请输入 API Key')
-      return
+      return false
     }
 
+    await window.electronAPI.config.setApiKey(apiKey.trim())
+    const testResult = await window.electronAPI.llm.chat({
+      messages: [{ role: 'user', content: 'Hi' }],
+      model: 'qwen-plus',
+      temperature: 0.1
+    })
+
+    if (!testResult) {
+      setError('API Key 验证失败，请检查 Key 是否正确')
+      return false
+    }
+
+    return true
+  }
+
+  const handleAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setTesting(true)
     setError('')
 
     try {
-      await window.electronAPI.config.setApiKey(apiKey.trim())
-      const testResult = await window.electronAPI.llm.chat({
-        messages: [{ role: 'user', content: 'Hi' }],
-        model: 'qwen-plus',
-        temperature: 0.1
-      })
+      if (!username.trim() || !password.trim()) {
+        setError('请输入账号和密码')
+        return
+      }
 
-      if (testResult) {
-        onSubmit(apiKey.trim(), playerName.trim())
-      } else {
-        setError('API Key 验证失败，请检查 Key 是否正确')
+      const apiOk = await validateApiKey()
+      if (!apiOk) {
+        return
       }
+
+      const authResult = isRegistering
+        ? await window.electronAPI.auth.register({
+            username: username.trim(),
+            password,
+            displayName: displayName.trim() || username.trim()
+          })
+        : await window.electronAPI.auth.login({
+            username: username.trim(),
+            password
+          })
+
+      if (!authResult.ok || !authResult.profile || !authResult.session) {
+        setError(authResult.message)
+        return
+      }
+
+      onSubmit(apiKey.trim(), authResult.profile.name, authResult.profile, authResult.session)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '未知错误'
-      if (msg.includes('API Key 未配置')) {
-        setError('API Key 不能为空')
-      } else if (msg.includes('401') || msg.includes('403')) {
-        setError('API Key 无效或已过期')
-      } else {
-        setError(`验证失败: ${msg}`)
+      setError(formatSetupError(err))
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setTesting(true)
+    setError('')
+
+    try {
+      if (!playerName.trim()) {
+        setError('请输入你的姓名')
+        return
       }
+
+      const apiOk = await validateApiKey()
+      if (!apiOk) {
+        return
+      }
+
+      const profile = await window.electronAPI.profiles.upsert(playerName.trim())
+      const session = await window.electronAPI.auth.getSession()
+      onSubmit(apiKey.trim(), profile.name, profile, session)
+    } catch (err) {
+      setError(formatSetupError(err))
     } finally {
       setTesting(false)
     }
@@ -70,220 +136,240 @@ export default function SetupScreen({ onSubmit, initialApiKey = '', initialPlaye
 
   return (
     <div style={styles.container}>
+      <div style={styles.backdrop} />
       <div style={styles.card}>
         <div style={styles.logoArea}>
-          <div style={styles.logoIcon}>
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-              <circle cx="32" cy="32" r="30" stroke="#7c6af7" strokeWidth="3" />
-              <path d="M20 32 L28 40 L44 24" stroke="#7c6af7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="32" cy="20" r="4" fill="#f7a26a" />
-              <path d="M22 44 L32 36 L42 44" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </div>
+          <div style={styles.logoIcon}>AI</div>
           <h1 style={styles.title}>AI 校园生存模拟器</h1>
           <p style={styles.subtitle}>Campus Survival Simulator</p>
         </div>
 
-        <div style={styles.infoBox}>
-          <p style={styles.infoText}>
-            这是一款基于 AI 大模型的校园生存模拟游戏。你的每一个选择都将影响你在校园中的命运。
-          </p>
+        <div style={dbHealth?.available ? styles.dbOnline : styles.dbOffline}>
+          {dbHealth?.available ? 'MySQL 已连接，存档将同步到数据库。' : '当前为本地模式：数据库不可用时仍可继续游戏。'}
         </div>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label}>
-            你的姓名
-          </label>
-          <div style={styles.inputWrapper}>
-            <input
-              type="text"
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              placeholder="例如：陈一鸣"
-              maxLength={16}
-              style={styles.input}
-              disabled={testing}
-            />
-          </div>
-
-          <label style={styles.label}>
-            百连/通义千问 API Key
-          </label>
-          <div style={styles.inputWrapper}>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="sk-xxxxxxxxxxxxxxxx"
-              style={styles.input}
-              disabled={testing}
-            />
-          </div>
-
-          {apiKeyDetected && (
-            <div style={styles.autoHint}>
-              已自动读取 API Key，可直接开始游戏。
-            </div>
-          )}
-
-          {error && (
-            <div style={styles.errorBox}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="#f87171">
-                <path d="M8 1C4.1 1 1 4.1 1 8s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7zm0 12.5c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5zM7 5h2v4H7V5z"/>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            style={{
-              ...styles.button,
-              opacity: testing ? 0.7 : 1,
-              cursor: testing ? 'wait' : 'pointer'
-            }}
-            disabled={testing}
-          >
-            {testing ? '验证中...' : '开始游戏'}
-          </button>
-        </form>
-
-        <div style={styles.hint}>
-          <a
-            href="https://dashscope.console.aliyun.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.link}
-          >
-            获取 API Key
-          </a>
-          <span style={styles.hintText}>（免费注册，每月有免费额度）</span>
+        <div style={styles.tabRow}>
+          <button type="button" onClick={() => setActiveTab('account')} style={{ ...styles.tabButton, ...(activeTab === 'account' ? styles.tabActive : {}) }}>账号登录</button>
+          <button type="button" onClick={() => setActiveTab('guest')} style={{ ...styles.tabButton, ...(activeTab === 'guest' ? styles.tabActive : {}) }}>昵称开始</button>
         </div>
+
+        {activeTab === 'account' ? (
+          <form onSubmit={handleAccountSubmit} style={styles.form}>
+            <label style={styles.label}>账号</label>
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="请输入账号" style={styles.input} disabled={testing} />
+
+            <label style={styles.label}>密码</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码" style={styles.input} disabled={testing} />
+
+            {isRegistering && (
+              <>
+                <label style={styles.label}>显示名称</label>
+                <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} />
+              </>
+            )}
+
+            <ApiKeyField apiKey={apiKey} setApiKey={setApiKey} disabled={testing} detected={apiKeyDetected} />
+
+            <button type="button" onClick={() => setIsRegistering(prev => !prev)} style={styles.linkButton}>
+              {isRegistering ? '已有账号，返回登录' : '没有账号，注册一个'}
+            </button>
+
+            {error && <div style={styles.errorBox}>{error}</div>}
+            <button type="submit" style={styles.button} disabled={testing}>{testing ? '处理中...' : isRegistering ? '注册并开始' : '登录并开始'}</button>
+          </form>
+        ) : (
+          <form onSubmit={handleGuestSubmit} style={styles.form}>
+            {profiles.length > 0 && (
+              <>
+                <label style={styles.label}>已有档案</label>
+                <div style={styles.profileGrid}>
+                  {profiles.map(profile => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => {
+                        setPlayerName(profile.name)
+                        onProfileSelect?.(profile.id)
+                      }}
+                      style={{ ...styles.profileButton, ...(profile.id === currentProfileId ? styles.profileButtonActive : {}) }}
+                      disabled={testing}
+                    >
+                      <span style={styles.profileName}>{profile.name}</span>
+                      <span style={styles.profileDate}>{new Date(profile.lastLoginAt).toLocaleDateString()}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <label style={styles.label}>你的姓名</label>
+            <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} />
+            <ApiKeyField apiKey={apiKey} setApiKey={setApiKey} disabled={testing} detected={apiKeyDetected} />
+            {error && <div style={styles.errorBox}>{error}</div>}
+            <button type="submit" style={styles.button} disabled={testing}>{testing ? '验证中...' : '开始游戏'}</button>
+          </form>
+        )}
       </div>
     </div>
   )
 }
 
+function ApiKeyField({ apiKey, setApiKey, disabled, detected }: { apiKey: string; setApiKey: (value: string) => void; disabled: boolean; detected: boolean }) {
+  return (
+    <>
+      <label style={styles.label}>百连/通义千问 API Key</label>
+      <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-xxxxxxxxxxxxxxxx" style={styles.input} disabled={disabled} />
+      {detected && <div style={styles.autoHint}>已自动读取 API Key，可直接开始游戏。</div>}
+    </>
+  )
+}
+
+function formatSetupError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : '未知错误'
+  if (msg.includes('API Key 未配置')) return 'API Key 不能为空'
+  if (msg.includes('401') || msg.includes('403')) return 'API Key 无效或已过期'
+  return `验证失败: ${msg}`
+}
+
 const styles: Record<string, React.CSSProperties> = {
   container: {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
     width: '100vw',
-    background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 70%)',
+    background: 'radial-gradient(circle at 24% 18%, rgba(20,184,166,0.18), transparent 32%), radial-gradient(circle at 78% 10%, rgba(37,99,235,0.18), transparent 34%), linear-gradient(135deg, #06121f 0%, #0c1b2b 50%, #101827 100%)',
     padding: '20px'
   },
+  backdrop: {
+    position: 'fixed',
+    inset: 0,
+    pointerEvents: 'none',
+    opacity: 0.18,
+    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)',
+    backgroundSize: '44px 44px'
+  },
   card: {
+    position: 'relative',
+    zIndex: 1,
     width: '100%',
-    maxWidth: '480px',
-    background: 'linear-gradient(145deg, #1a1a2e 0%, #16162a 100%)',
-    borderRadius: '20px',
-    border: '1px solid #2a2a4c',
-    padding: '48px 40px',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(124,106,247,0.1)'
+    maxWidth: '520px',
+    background: 'linear-gradient(145deg, rgba(15,23,42,0.9), rgba(8,13,24,0.9))',
+    borderRadius: '12px',
+    border: '1px solid rgba(148,163,184,0.18)',
+    padding: '34px',
+    boxShadow: '0 24px 72px rgba(0,0,0,0.42)',
+    backdropFilter: 'blur(16px)'
   },
-  logoArea: {
-    textAlign: 'center' as const,
-    marginBottom: '32px'
-  },
+  logoArea: { textAlign: 'center', marginBottom: '22px' },
   logoIcon: {
-    marginBottom: '16px',
-    display: 'flex',
-    justifyContent: 'center'
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: 700,
-    color: '#e8e8f0',
-    marginBottom: '8px',
-    letterSpacing: '2px'
-  },
-  subtitle: {
-    fontSize: '13px',
-    color: '#7c6af7',
-    letterSpacing: '3px',
-    textTransform: 'uppercase' as const
-  },
-  infoBox: {
-    background: 'rgba(124,106,247,0.08)',
-    borderRadius: '10px',
-    padding: '16px',
-    marginBottom: '28px',
-    border: '1px solid rgba(124,106,247,0.15)'
-  },
-  infoText: {
-    fontSize: '14px',
-    color: '#9898b0',
-    lineHeight: 1.7,
-    textAlign: 'center' as const
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px'
-  },
-  label: {
-    fontSize: '14px',
-    color: '#e8e8f0',
-    fontWeight: 500,
-    marginBottom: '4px'
-  },
-  inputWrapper: {
-    position: 'relative' as const
-  },
-  input: {
-    width: '100%',
-    padding: '14px 16px',
-    background: '#0f0f1a',
-    border: '1px solid #3a3a5c',
-    borderRadius: '10px',
-    color: '#e8e8f0',
-    fontSize: '15px',
-    transition: 'border-color 0.2s ease',
-    fontFamily: 'var(--font-mono)'
-  },
-  errorBox: {
+    width: '58px',
+    height: '58px',
+    margin: '0 auto 14px',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #14b8a6, #2563eb)',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '10px 14px',
-    background: 'rgba(248,113,113,0.1)',
-    borderRadius: '8px',
-    color: '#f87171',
-    fontSize: '13px',
-    border: '1px solid rgba(248,113,113,0.2)'
+    justifyContent: 'center',
+    color: '#fff',
+    fontWeight: 900,
+    fontSize: '22px'
   },
-  autoHint: {
-    fontSize: '12px',
-    color: '#93c5fd',
-    background: 'rgba(96,165,250,0.1)',
-    border: '1px solid rgba(96,165,250,0.2)',
+  title: { fontSize: '28px', fontWeight: 900, color: '#f8fafc', marginBottom: '8px' },
+  subtitle: { fontSize: '14px', color: '#9898b0' },
+  dbOnline: {
+    padding: '10px 12px',
     borderRadius: '8px',
-    padding: '8px 10px'
+    background: 'rgba(45,212,191,0.1)',
+    border: '1px solid rgba(45,212,191,0.22)',
+    color: '#99f6e4',
+    fontSize: '12px',
+    marginBottom: '14px'
+  },
+  dbOffline: {
+    padding: '10px 12px',
+    borderRadius: '8px',
+    background: 'rgba(251,191,36,0.1)',
+    border: '1px solid rgba(251,191,36,0.22)',
+    color: '#fde68a',
+    fontSize: '12px',
+    marginBottom: '14px'
+  },
+  tabRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '8px',
+    marginBottom: '18px'
+  },
+  tabButton: {
+    padding: '11px',
+    borderRadius: '8px',
+    background: 'rgba(15,23,42,0.72)',
+    color: '#cbd5e1',
+    fontWeight: 800,
+    border: '1px solid rgba(148,163,184,0.16)'
+  },
+  tabActive: {
+    background: 'linear-gradient(135deg, rgba(20,184,166,0.22), rgba(37,99,235,0.16))',
+    color: '#f8fafc',
+    border: '1px solid rgba(45,212,191,0.34)'
+  },
+  form: { display: 'flex', flexDirection: 'column', gap: '11px' },
+  label: { fontSize: '13px', color: '#c8c8e0', fontWeight: 700 },
+  input: {
+    width: '100%',
+    padding: '13px 15px',
+    background: 'rgba(15,23,42,0.9)',
+    border: '1px solid rgba(148,163,184,0.22)',
+    borderRadius: '8px',
+    color: '#e8e8f0',
+    fontSize: '15px'
+  },
+  autoHint: { color: '#4ade80', fontSize: '12px' },
+  linkButton: {
+    alignSelf: 'flex-start',
+    color: '#93c5fd',
+    background: 'transparent',
+    fontSize: '13px',
+    fontWeight: 700
+  },
+  errorBox: {
+    padding: '10px 12px',
+    background: 'rgba(248,113,113,0.1)',
+    border: '1px solid rgba(248,113,113,0.3)',
+    borderRadius: '8px',
+    color: '#fca5a5',
+    fontSize: '13px'
   },
   button: {
-    padding: '14px 24px',
-    background: 'linear-gradient(135deg, #7c6af7 0%, #5a4bbf 100%)',
+    marginTop: '6px',
+    padding: '14px',
+    background: 'linear-gradient(135deg, #14b8a6 0%, #2563eb 100%)',
     color: '#fff',
     borderRadius: '10px',
     fontSize: '16px',
-    fontWeight: 600,
-    marginTop: '8px',
-    letterSpacing: '1px',
-    boxShadow: '0 4px 16px rgba(124,106,247,0.3)'
+    fontWeight: 800
   },
-  hint: {
-    marginTop: '20px',
-    textAlign: 'center' as const,
-    fontSize: '13px',
-    color: '#9898b0'
+  profileGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+    gap: '8px'
   },
-  link: {
-    color: '#7c6af7',
-    textDecoration: 'none'
+  profileButton: {
+    padding: '10px',
+    borderRadius: '8px',
+    background: 'rgba(15,23,42,0.72)',
+    border: '1px solid rgba(148,163,184,0.16)',
+    color: '#e8e8f0',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    textAlign: 'left'
   },
-  hintText: {
-    marginLeft: '4px'
-  }
+  profileButtonActive: {
+    border: '1px solid rgba(45,212,191,0.42)'
+  },
+  profileName: { fontWeight: 800, fontSize: '13px' },
+  profileDate: { color: '#9898b0', fontSize: '11px' }
 }

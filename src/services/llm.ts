@@ -50,6 +50,9 @@ export async function chatStream(
     let partialText = ''
     let completed = false
     const cleanups: Array<() => void> = []
+    const streamThrottle = createFrameThrottle(handlers.onChunk)
+    const throttledChunk = (text: string, delta: string) => streamThrottle.push(text, delta)
+    const flushChunk = () => streamThrottle.flush()
 
     const finalize = (callback: () => void) => {
       if (completed) {
@@ -68,7 +71,7 @@ export async function chatStream(
       }
 
       partialText += chunk
-      handlers.onChunk?.(partialText, chunk)
+      throttledChunk(partialText, chunk)
     }))
 
     cleanups.push(window.electronAPI.llm.onChatStreamEnd(({ requestId: incomingId }) => {
@@ -76,6 +79,7 @@ export async function chatStream(
         return
       }
 
+      flushChunk()
       finalize(() => resolve(partialText))
     }))
 
@@ -102,6 +106,38 @@ export async function chatStream(
       finalize(() => reject(error))
     })
   })
+}
+
+function createFrameThrottle(callback?: (partialText: string, delta: string) => void) {
+  let frame: number | null = null
+  let latestText = ''
+  let deltaBuffer = ''
+
+  const flush = () => {
+    frame = null
+    if (!latestText) {
+      return
+    }
+
+    callback?.(latestText, deltaBuffer)
+    deltaBuffer = ''
+  }
+
+  return {
+    push(partialText: string, delta: string) {
+      latestText = partialText
+      deltaBuffer += delta
+      if (frame === null) {
+        frame = window.requestAnimationFrame(flush)
+      }
+    },
+    flush() {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+        flush()
+      }
+    }
+  }
 }
 
 export async function generateImage(prompt: string): Promise<string> {

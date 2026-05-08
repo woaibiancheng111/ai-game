@@ -30,6 +30,45 @@ export interface ImageGenPayload {
   model?: string
 }
 
+export interface PlayerProfilePayload {
+  id: string
+  userId?: string | null
+  name: string
+  mode?: 'account' | 'guest' | 'local'
+  createdAt: number
+  lastLoginAt: number
+}
+
+export interface SaveSlotPayload {
+  slotId: string
+  profileId: string
+  label: string
+  savedAt: number
+  data: unknown
+}
+
+export interface AuthSessionPayload {
+  userId: string | null
+  username: string | null
+  displayName: string
+  mode: 'account' | 'guest' | 'local'
+  dbAvailable: boolean
+}
+
+export interface AuthResultPayload {
+  ok: boolean
+  message: string
+  session: AuthSessionPayload | null
+  profile: PlayerProfilePayload | null
+  dbAvailable: boolean
+}
+
+export interface DbHealthPayload {
+  available: boolean
+  mode: 'mysql' | 'local'
+  message: string
+}
+
 const electronAPI = {
   llm: {
     chat: (payload: LLMChatPayload) => ipcRenderer.invoke('llm:chat', payload),
@@ -55,6 +94,34 @@ const electronAPI = {
     get: (key: string) => ipcRenderer.invoke('storage:get', key),
     set: (key: string, value: unknown) => ipcRenderer.invoke('storage:set', key, value),
     delete: (key: string) => ipcRenderer.invoke('storage:delete', key)
+  },
+  auth: {
+    register: (payload: { username: string; password: string; displayName: string }) => ipcRenderer.invoke('auth:register', payload),
+    login: (payload: { username: string; password: string }) => ipcRenderer.invoke('auth:login', payload),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    getSession: () => ipcRenderer.invoke('auth:getSession')
+  },
+  db: {
+    health: () => ipcRenderer.invoke('db:health')
+  },
+  profiles: {
+    list: () => ipcRenderer.invoke('profiles:list'),
+    upsert: (name: string) => ipcRenderer.invoke('profiles:upsert', name),
+    setCurrent: (profileId: string) => ipcRenderer.invoke('profiles:setCurrent', profileId),
+    getCurrent: () => ipcRenderer.invoke('profiles:getCurrent')
+  },
+  saves: {
+    list: (profileId: string) => ipcRenderer.invoke('saves:list', profileId),
+    write: (payload: SaveSlotPayload) => ipcRenderer.invoke('saves:write', payload),
+    read: (profileId: string, slotId: string) => ipcRenderer.invoke('saves:read', profileId, slotId)
+  },
+  progress: {
+    get: (profileId: string) => ipcRenderer.invoke('progress:get', profileId),
+    set: (profileId: string, unlockedActIds: string[]) => ipcRenderer.invoke('progress:set', profileId, unlockedActIds)
+  },
+  achievements: {
+    get: (profileId: string) => ipcRenderer.invoke('achievements:get', profileId),
+    set: (profileId: string, achievementIds: string[]) => ipcRenderer.invoke('achievements:set', profileId, achievementIds)
   },
   config: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('config:setApiKey', apiKey),
