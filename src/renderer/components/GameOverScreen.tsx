@@ -106,16 +106,18 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     height: '100vh',
     width: '100vw',
-    background: 'radial-gradient(circle at 26% 18%, rgba(20,184,166,0.16), transparent 30%), radial-gradient(circle at 78% 12%, rgba(96,165,250,0.16), transparent 32%), linear-gradient(135deg, #06121f 0%, #0c1b2b 52%, #101827 100%)',
+    background: 'url(/backgrounds/dorm.png) center/cover',
     padding: '20px'
   },
   backdrop: {
-    position: 'fixed',
-    inset: 0,
-    pointerEvents: 'none',
-    opacity: 0.16,
-    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)',
-    backgroundSize: '44px 44px'
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(180deg, rgba(11,11,24,0.3) 0%, rgba(11,11,24,0.8) 60%, rgba(11,11,24,0.95) 100%)',
+    zIndex: 0,
+    pointerEvents: 'none' as const
   },
   card: {
     position: 'relative',
@@ -124,13 +126,14 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '820px',
     maxHeight: '94vh',
     overflowY: 'auto',
-    background: 'linear-gradient(145deg, rgba(15,23,42,0.92), rgba(8,13,24,0.92))',
-    borderRadius: '12px',
-    border: '1px solid rgba(148,163,184,0.18)',
+    background: 'rgba(20, 20, 35, 0.65)',
+    borderRadius: '24px',
+    border: '1px solid var(--color-border)',
     padding: '30px',
     textAlign: 'center',
-    boxShadow: '0 24px 72px rgba(0,0,0,0.42)',
-    backdropFilter: 'blur(16px)'
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)'
   },
   levelBadge: {
     display: 'inline-block',

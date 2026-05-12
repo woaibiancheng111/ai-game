@@ -340,17 +340,19 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     width: '100vw',
     height: '100vh',
-    background: 'radial-gradient(circle at 20% 20%, rgba(20,184,166,0.18), transparent 30%), radial-gradient(circle at 78% 10%, rgba(96,165,250,0.18), transparent 32%), linear-gradient(135deg, #06121f 0%, #0c1b2b 48%, #101827 100%)',
+    background: 'url(/backgrounds/campus_gate.png) center/cover',
     overflow: 'hidden',
     transition: 'opacity 320ms ease'
   },
   backdrop: {
-    position: 'fixed',
-    inset: 0,
-    pointerEvents: 'none',
-    opacity: 0.24,
-    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)',
-    backgroundSize: '44px 44px'
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(180deg, rgba(11,11,24,0.3) 0%, rgba(11,11,24,0.8) 60%, rgba(11,11,24,0.95) 100%)',
+    zIndex: 0,
+    pointerEvents: 'none' as const
   },
   skyGlow: {
     position: 'fixed',
@@ -390,13 +392,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   brandBlock: {
     padding: '26px',
-    borderRadius: '10px',
-    background: 'linear-gradient(180deg, rgba(15,23,42,0.78), rgba(8,13,24,0.7))',
-    border: '1px solid rgba(148,163,184,0.16)',
-    boxShadow: '0 20px 48px rgba(0,0,0,0.22)'
+    borderRadius: '16px',
+    background: 'rgba(20, 20, 35, 0.65)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid var(--color-border)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
   },
   brandKicker: {
-    color: '#2dd4bf',
+    color: 'var(--color-primary)',
     fontSize: '12px',
     fontWeight: 800,
     letterSpacing: '1px',
@@ -504,12 +508,13 @@ const styles: Record<string, React.CSSProperties> = {
   mainPanel: {
     minHeight: 0,
     overflowY: 'auto',
-    borderRadius: '12px',
-    background: 'rgba(8,13,24,0.66)',
-    border: '1px solid rgba(148,163,184,0.16)',
+    borderRadius: '20px',
+    background: 'rgba(20, 20, 35, 0.65)',
+    border: '1px solid var(--color-border)',
     padding: '26px',
     backdropFilter: 'blur(16px)',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.28)'
+    WebkitBackdropFilter: 'blur(16px)',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.5)'
   },
   mainPanelCompact: {
     overflowY: 'visible',
@@ -540,9 +545,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '22px',
     alignItems: 'center',
     padding: '24px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, rgba(20,184,166,0.2), rgba(37,99,235,0.14) 52%, rgba(15,23,42,0.88))',
-    border: '1px solid rgba(45,212,191,0.22)',
+    borderRadius: '16px',
+    background: 'linear-gradient(135deg, rgba(124,106,247,0.2), rgba(35,35,60,0.5) 52%, rgba(20,20,35,0.88))',
+    border: '1px solid var(--color-border)',
     marginBottom: '16px'
   },
   heroPanelCompact: {
@@ -668,9 +673,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '16px',
     textAlign: 'left',
     padding: '16px',
-    borderRadius: '10px',
-    border: '1px solid rgba(148,163,184,0.14)',
-    borderLeft: '4px solid #2dd4bf',
+    borderRadius: '16px',
+    border: '1px solid var(--color-border)',
+    borderLeft: '4px solid var(--color-primary)',
     transition: 'transform 150ms ease, border-color 150ms ease, background 150ms ease'
   },
   chapterRowCompact: {
@@ -678,11 +683,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px'
   },
   chapterRowUnlocked: {
-    background: 'linear-gradient(180deg, rgba(30,41,59,0.78), rgba(15,23,42,0.84))',
+    background: 'linear-gradient(180deg, rgba(35,35,60,0.5), rgba(20,20,35,0.84))',
     color: '#e5e7eb'
   },
   chapterRowLocked: {
-    background: 'rgba(15,23,42,0.48)',
+    background: 'rgba(20,20,35,0.48)',
     color: '#64748b',
     cursor: 'not-allowed'
   },

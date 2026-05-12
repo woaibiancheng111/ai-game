@@ -58,7 +58,7 @@ export default function DecisionPanel({ choices, onSelect, disabled, emptyText =
 const styles: Record<string, React.CSSProperties> = {
   emptyContainer: {
     minHeight: '74px',
-    display: 'flex',
+    display: 'none', // Hide empty container to keep screen clean when no choices
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: '12px',
@@ -78,24 +78,30 @@ const styles: Record<string, React.CSSProperties> = {
     width: '6px',
     height: '6px',
     borderRadius: '50%',
-    background: '#7c6af7',
-    animation: 'pulse 1.5s ease-in-out infinite'
+    background: 'var(--color-primary)',
+    animation: 'pulseGlow 1.5s ease-in-out infinite'
   },
   container: {
-    background: 'rgba(8,13,24,0.76)',
-    borderRadius: '12px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    padding: '14px 16px 16px',
-    boxShadow: '0 18px 42px rgba(0,0,0,0.28)',
-    backdropFilter: 'blur(14px)'
+    background: 'rgba(20,20,35,0.6)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderRadius: '20px',
+    border: '1px solid var(--color-border)',
+    padding: '24px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    animation: 'slideInUp 0.4s ease-out'
   },
   header: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    marginBottom: '12px',
-    fontSize: '13px',
-    color: '#94a3b8'
+    gap: '10px',
+    marginBottom: '16px',
+    fontSize: '14px',
+    color: 'var(--color-accent)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '2px',
+    fontWeight: 700,
+    textShadow: '0 0 8px var(--color-accent-glow)'
   },
   headerText: {
     letterSpacing: '1px'
@@ -107,42 +113,47 @@ const styles: Record<string, React.CSSProperties> = {
   },
   choiceButton: {
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
+    alignItems: 'center',
+    gap: '16px',
     minHeight: '58px',
-    padding: '13px 15px',
-    background: 'linear-gradient(180deg, rgba(30,41,59,0.76), rgba(15,23,42,0.9))',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: '10px',
-    color: '#e8e8f0',
+    padding: '16px 20px',
+    background: 'rgba(35,35,60,0.5)',
+    border: '1px solid rgba(124,106,247,0.3)',
+    borderRadius: '16px',
+    color: 'var(--color-text)',
     textAlign: 'left' as const,
-    fontSize: '14px',
-    transition: 'transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
-    cursor: 'pointer'
+    fontSize: '15px',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    cursor: 'pointer',
+    position: 'relative' as const,
+    overflow: 'hidden'
   },
   choiceButtonHover: {
-    background: 'linear-gradient(180deg, rgba(20,184,166,0.16), rgba(30,41,59,0.94))',
-    border: '1px solid rgba(45,212,191,0.38)',
-    transform: 'translateY(-1px)',
-    boxShadow: '0 8px 18px rgba(20,184,166,0.12)'
+    background: 'rgba(124,106,247,0.2)',
+    border: '1px solid var(--color-primary)',
+    transform: 'translateY(-2px) scale(1.02)',
+    boxShadow: 'var(--shadow-glow)',
+    color: '#fff'
   },
   choiceButtonDisabled: {
     opacity: 0.5,
     cursor: 'not-allowed',
-    transform: 'none'
+    transform: 'none',
+    boxShadow: 'none'
   },
   choiceNumber: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '7px',
-    background: 'rgba(45,212,191,0.14)',
-    color: '#5eead4',
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dim) 100%)',
+    color: '#fff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: 700,
-    fontSize: '13px',
-    flexShrink: 0
+    fontSize: '14px',
+    flexShrink: 0,
+    boxShadow: '0 2px 8px rgba(124,106,247,0.4)'
   },
   choiceText: {
     flex: 1,

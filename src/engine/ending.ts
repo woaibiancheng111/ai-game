@@ -184,6 +184,8 @@ function withGrowth(state: GameState, report: EndingReportDraft): EndingReport {
   if (state.playerStatus.social >= 70 || state.flags.helpedClassmatesAvoidScam) strengths.push('同伴协作')
   if (state.flags.healthyAIToolUse) strengths.push('AI 工具边界')
   if (state.flags.weeklyReviewHabit || state.flags.usedFeedbackTable) strengths.push('复盘能力')
+  if (state.flags.deepBondWithXuejie || state.flags.dazhiOpenedUp || state.flags.xiaojieRevealedPast || state.flags.supportedXiaomingBreakdown) strengths.push('人物羁绊')
+  if (state.flags.wroteWinterReflection || state.flags.admittedImposterSyndrome) strengths.push('情感韧性')
 
   return {
     ...report,

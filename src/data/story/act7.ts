@@ -106,7 +106,7 @@ export const ACT7_NODES: Record<string, StoryNode> = {
       {
         id: 'a7_c1c_review_rejections',
         text: '把拒信当反馈，修改材料和路线',
-        nextNodeId: 'act7_internship_offer',
+        nextNodeId: 'act7_imposter_syndrome',
         statusChanges: { gpa: 0.08, reputation: 6, mood: 4, energy: -8 },
         affectionChanges: { xuejie: 8, wang_laoshi: 5, xiaoming: 4 },
         setFlags: { reviewedRejections: true },
@@ -115,7 +115,7 @@ export const ACT7_NODES: Record<string, StoryNode> = {
       {
         id: 'a7_c1c_pay_polish',
         text: '差点购买包装课，先查口碑和合同',
-        nextNodeId: 'act7_internship_offer',
+        nextNodeId: 'act7_imposter_syndrome',
         statusChanges: { antiFraudAwareness: 10, money: -100, mood: -2, trust: -4 },
         affectionChanges: { xiaojie: 8, wang_laoshi: 4 },
         setFlags: { checkedCareerPolishCourse: true },
@@ -124,11 +124,93 @@ export const ACT7_NODES: Record<string, StoryNode> = {
       {
         id: 'a7_c1c_escape_scroll',
         text: '陷进经验帖和短视频，拖延真正行动',
-        nextNodeId: 'act7_internship_offer',
+        nextNodeId: 'act7_imposter_syndrome',
         statusChanges: { mood: -10, energy: -10, gpa: -0.04, trust: 4 },
         affectionChanges: { wang_laoshi: -2, xuejie: -3, dazhi: 2 },
         setFlags: { avoidedAfterRejection: true },
         narrativeText: '你刷到凌晨，像在用别人的进度麻醉自己的停滞。第二天醒来，拒信还在那里，简历也没有变。焦虑最会伪装成信息收集，让你感觉忙了很久，却没有真正前进一步。'
+      }
+    ]
+  },
+
+  act7_imposter_syndrome: {
+    id: 'act7_imposter_syndrome',
+    actId: 'act7',
+    title: '冒名顶替',
+    description: '某天开组会，你发现自己是唯一一个说不出论文进展的人。旁边的同学讲实验数据、讲文献综述、讲导师反馈，语气平静得像在报天气。你坐在角落里，PPT 打开了十五页，脑子里却只有一句话：\"我是怎么混进来的。\"这种感觉不是第一次出现。每次被夸\"你做得不错\"的时候，你心里总有一个声音说：他们早晚会发现我其实不行。你开始怀疑自己的每一次进步是不是都只是运气，而运气迟早会用完。',
+    location: '学院会议室',
+    week: 49,
+    day: 4,
+    npcId: 'wang_laoshi',
+    imagePrompt: '学院会议室组会，一个学生坐在角落看着别人做汇报，PPT打开但手没动，自我怀疑的安静压力',
+    playerChoices: [
+      {
+        id: 'a7_imposter_admit',
+        text: '会后找王老师，坦白说自己觉得不配在这里',
+        nextNodeId: 'act7_quiet_connection',
+        statusChanges: { mood: 10, reputation: 4, energy: -4 },
+        affectionChanges: { wang_laoshi: 14 },
+        setFlags: { admittedImposterSyndrome: true },
+        narrativeText: '王老师听完没有立刻安慰你，而是问了一句你没想到的话：\"你觉得这个房间里，有几个人也在想同样的事？\"你说不知道。她说：\"我当年读研的时候，每次组会都觉得自己是最差的那个。后来我发现，觉得自己不够好的人反而最认真。\"她又补了一句：\"冒名顶替感不是真相，它只是你对自己过于严格的副产品。\"那天你没有立刻好起来，但至少知道了这种感觉有名字，也有很多人跟你一样。'
+      },
+      {
+        id: 'a7_imposter_push',
+        text: '硬逼自己加班赶进度，用忙碌盖住不安',
+        nextNodeId: 'act7_quiet_connection',
+        statusChanges: { gpa: 0.06, energy: -18, mood: -10 },
+        affectionChanges: { xiaoming: 2, xuejie: -3 },
+        setFlags: { overworkedFromImposter: true },
+        narrativeText: '你在实验室待到凌晨两点，第二天早上八点又到。三天后，数据跑出来了，但你的眼圈黑得像被打了一拳。小明看着你说：\"你这不叫努力，叫自我惩罚。\"你想反驳，可嘴张开之后什么也说不出来。也许他是对的——你不是在追进度，你是在用过劳证明自己有资格待在这里。'
+      },
+      {
+        id: 'a7_imposter_compare',
+        text: '继续和别人比较，越比越焦虑',
+        nextNodeId: 'act7_quiet_connection',
+        statusChanges: { mood: -14, energy: -8, social: -4 },
+        affectionChanges: { wang_laoshi: -2, xuejie: -2 },
+        setFlags: { deepImposterSpiral: true },
+        narrativeText: '你开始统计每个同学的论文数量、实习经历和获奖列表。每一条都像一根尺子，量出你和\"应该成为的样子\"之间的距离。你知道这样不健康，可你停不下来——比较已经变成了一种强迫性的自我审判。后来你在手册的心理支持页加了一条：\"如果你发现自己在数别人有多少成果，停下来。数自己走了多远。\"'
+      }
+    ]
+  },
+
+  act7_quiet_connection: {
+    id: 'act7_quiet_connection',
+    actId: 'act7',
+    title: '无声的默契',
+    description: '大三最后一次期末考试结束的那个傍晚，你在湖边长椅上发呆。夕阳把水面染成橘红色，远处有人在跑步，更远处的教学楼开始一层一层亮灯。林雨薇不知道什么时候也走到了湖边，在你旁边坐下来。她没有问你考得怎么样，你也没有问她研究进展。你们就那样坐了很久，看着天色一点点暗下去。你想起第一次在图书馆见到她的时候，她递给你一本习题册；想起她靠在走廊墙上发呆的样子；想起冬天台阶上被风吹散的保研材料。三年了，她从\"学姐\"慢慢变成了一个你真正在意的人——不是因为她帮过你很多，而是因为你见过她不完美的样子，她也见过你的。',
+    location: '校园湖边',
+    week: 50,
+    day: 3,
+    npcId: 'xuejie',
+    imagePrompt: '大学湖边长椅黄昏，两个人并排坐着看夕阳，安静默契不说话，橘红色光线温柔洒在水面上',
+    playerChoices: [
+      {
+        id: 'a7_quiet_honest',
+        text: '轻声说：学姐，这三年谢谢你。不只是学习上的',
+        nextNodeId: 'act7_internship_offer',
+        statusChanges: { mood: 14, social: 6 },
+        affectionChanges: { xuejie: 24 },
+        setFlags: { expressedGratitudeToXuejie: true, deepEmotionalBond: true },
+        narrativeText: '林雨薇转头看你，夕阳在她镜片上晃了一下。她沉默了几秒，然后说了一句让你心跳漏了半拍的话：\"我也是。不只是因为你肯学。\"你没有追问\"那是因为什么\"，她也没有说。但那句未完成的话悬在你们之间，像湖面上的倒影——看得见形状，碰不到边。你不确定那是什么，也不急着定义。有些感情不需要名字，只需要在某个安静的傍晚，知道对方也在。'
+      },
+      {
+        id: 'a7_quiet_joke',
+        text: '笑着说：毕业之前你还欠我一杯奶茶',
+        nextNodeId: 'act7_internship_offer',
+        statusChanges: { mood: 10, social: 8 },
+        affectionChanges: { xuejie: 18 },
+        setFlags: { lightenedMoodWithXuejie: true },
+        narrativeText: '林雨薇笑出了声，那种笑很轻松，不像她平时在学习群里的从容，更像一个卸下了什么的人。\"好啊，但你得等我论文过了再说。\"你们因为一杯奶茶聊了很多本来不会聊的话题：她小时候想当画家、你曾经怕黑到小学三年级、大一那个差点被骗的夏天。等天完全黑下来的时候，你才发现自己已经很久没有这么放松地跟一个人说话了。你不确定这算什么，但走回宿舍的路上，你的步子比来时轻了很多。'
+      },
+      {
+        id: 'a7_quiet_silence',
+        text: '什么也不说，就这样安静地坐着',
+        nextNodeId: 'act7_internship_offer',
+        statusChanges: { mood: 8 },
+        affectionChanges: { xuejie: 14 },
+        setFlags: { sharedSilenceWithXuejie: true },
+        narrativeText: '你们谁也没有先开口。风从湖面吹过来，有点凉，但你没有动。她也没有。那大概是你整个大学里最安静的二十分钟——没有手机提醒、没有群消息、没有人需要你做什么决定。你后来试着在日记里描述那个傍晚，可写了几次都删掉了。有些时刻不适合被文字装进去，它只存在于当时的光线和空气里。你唯一能确定的是，那二十分钟之后，你心里有一个很小的地方变得不一样了。'
       }
     ]
   },

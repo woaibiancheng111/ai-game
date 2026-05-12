@@ -107,16 +107,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
   drawer: {
     position: 'fixed',
-    top: 0,
-    right: 0,
-    bottom: 0,
+    top: '20px',
+    right: '20px',
+    bottom: '20px',
     zIndex: 40,
-    width: 'min(400px, 92vw)',
+    width: 'min(360px, calc(100vw - 40px))',
     padding: '24px',
-    background: 'linear-gradient(180deg, rgba(15,23,42,0.98), rgba(8,13,24,0.98))',
-    borderLeft: '1px solid rgba(148,163,184,0.18)',
-    boxShadow: '-24px 0 52px rgba(0,0,0,0.38)',
-    transition: 'transform 220ms ease',
+    background: 'rgba(20, 20, 35, 0.75)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '24px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+    transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
     overflowY: 'auto'
   },
   header: {
@@ -127,10 +130,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '18px'
   },
   kicker: {
-    color: '#5eead4',
+    color: 'var(--color-primary)',
     fontSize: '12px',
     fontWeight: 900,
-    letterSpacing: '1px',
+    letterSpacing: '2px',
+    textTransform: 'uppercase' as const,
     marginBottom: '6px'
   },
   title: {
@@ -141,18 +145,20 @@ const styles: Record<string, React.CSSProperties> = {
   closeButton: {
     padding: '8px 12px',
     borderRadius: '8px',
-    background: 'rgba(30,41,59,0.92)',
-    border: '1px solid rgba(148,163,184,0.16)',
-    color: '#cbd5e1',
+    background: 'rgba(35, 35, 60, 0.5)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text)',
     fontSize: '12px',
-    fontWeight: 800
+    fontWeight: 800,
+    transition: 'all 0.2s ease'
   },
   profileCard: {
     padding: '16px',
-    borderRadius: '10px',
-    background: 'linear-gradient(135deg, rgba(20,184,166,0.14), rgba(37,99,235,0.1))',
-    border: '1px solid rgba(45,212,191,0.18)',
-    marginBottom: '18px'
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, rgba(124,106,247,0.2), rgba(35,35,60,0.4))',
+    border: '1px solid var(--color-primary-glow)',
+    boxShadow: 'var(--shadow-glow)',
+    marginBottom: '24px'
   },
   profileName: {
     color: '#f8fafc',
@@ -177,9 +183,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statItem: {
     padding: '12px',
-    borderRadius: '9px',
-    background: 'rgba(30,41,59,0.62)',
-    border: '1px solid rgba(148,163,184,0.12)'
+    borderRadius: '12px',
+    background: 'rgba(35, 35, 60, 0.4)',
+    border: '1px solid rgba(124,106,247,0.2)'
   },
   statTop: {
     display: 'flex',
@@ -214,9 +220,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   affectionItem: {
     padding: '12px',
-    borderRadius: '9px',
-    background: 'rgba(15,23,42,0.62)',
-    border: '1px solid rgba(148,163,184,0.12)'
+    borderRadius: '12px',
+    background: 'rgba(35, 35, 60, 0.4)',
+    border: '1px solid rgba(124,106,247,0.2)'
   },
   affectionTop: {
     display: 'flex',

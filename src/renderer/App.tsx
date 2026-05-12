@@ -17,6 +17,12 @@ import { AUTOSAVE_KEY, AUTOSAVE_SLOT_ID, UNLOCKED_ACTS_KEY, createSaveData } fro
 import { getMessagesRevealDelay } from './utils/revealTiming'
 import { getUnlockedAchievementIds } from '../engine/achievements'
 
+const getBackgroundImage = (location: string) => {
+  if (location?.includes('宿舍')) return 'url(/backgrounds/dorm.png)';
+  if (location?.includes('教室') || location?.includes('上课')) return 'url(/backgrounds/classroom.png)';
+  return 'url(/backgrounds/campus_gate.png)';
+};
+
 type GamePhase = 'setup' | 'menu' | 'playing' | 'gameover'
 
 export default function App() {
@@ -750,9 +756,11 @@ export default function App() {
     )
   }
 
+  const bgImage = gameState.currentSceneImageUrl ? `url(${gameState.currentSceneImageUrl})` : getBackgroundImage(gameState.currentLocation || '');
+
   return (
-    <div style={styles.container}>
-      <div style={styles.gameBackdrop} />
+    <div style={{ ...styles.container, background: `${bgImage} center/cover` }}>
+      <div style={styles.backgroundOverlay} />
       <button
         type="button"
         onClick={handleReturnHome}
@@ -933,16 +941,17 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     height: '100vh',
     width: '100vw',
-    background: 'radial-gradient(circle at 18% 18%, rgba(20,184,166,0.16), transparent 30%), radial-gradient(circle at 82% 12%, rgba(37,99,235,0.18), transparent 34%), linear-gradient(135deg, #07111f 0%, #0f1d2d 48%, #111827 100%)',
     overflow: 'hidden'
   },
-  gameBackdrop: {
-    position: 'fixed',
-    inset: 0,
-    pointerEvents: 'none',
-    opacity: 0.18,
-    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.08) 1px, transparent 1px)',
-    backgroundSize: '42px 42px'
+  backgroundOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(180deg, rgba(11,11,24,0.1) 0%, rgba(11,11,24,0.6) 60%, rgba(11,11,24,0.95) 100%)',
+    zIndex: 0,
+    pointerEvents: 'none' as const
   },
   mainArea: {
     position: 'relative',
@@ -950,42 +959,47 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    width: 'min(1180px, calc(100vw - 48px))',
+    width: '100%',
+    maxWidth: '1200px',
     margin: '0 auto',
-    padding: '18px 0 18px',
-    gap: '14px',
+    padding: '80px 24px 24px',
+    gap: '20px',
     overflow: 'hidden'
   },
   homeButton: {
     position: 'fixed',
-    left: '22px',
-    bottom: '22px',
+    left: '24px',
+    top: '24px',
     zIndex: 20,
-    padding: '9px 14px',
-    background: 'rgba(15,23,42,0.78)',
-    border: '1px solid rgba(45,212,191,0.24)',
-    borderRadius: '8px',
-    color: '#99f6e4',
-    fontSize: '13px',
+    padding: '10px 20px',
+    background: 'rgba(20, 20, 35, 0.65)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '12px',
+    color: 'var(--color-text)',
+    fontSize: '14px',
     fontWeight: 700,
-    boxShadow: '0 10px 24px rgba(0,0,0,0.24)',
-    backdropFilter: 'blur(10px)',
-    cursor: 'pointer'
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    cursor: 'pointer',
+    letterSpacing: '1px'
   },
   statusButton: {
     position: 'fixed',
-    right: '22px',
-    bottom: '22px',
+    right: '24px',
+    top: '24px',
     zIndex: 20,
-    padding: '9px 14px',
-    background: 'rgba(15,23,42,0.78)',
-    border: '1px solid rgba(96,165,250,0.24)',
-    borderRadius: '8px',
-    color: '#bfdbfe',
-    fontSize: '13px',
+    padding: '10px 20px',
+    background: 'rgba(20, 20, 35, 0.65)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '12px',
+    color: 'var(--color-primary)',
+    fontSize: '14px',
     fontWeight: 700,
-    boxShadow: '0 10px 24px rgba(0,0,0,0.24)',
-    backdropFilter: 'blur(10px)',
-    cursor: 'pointer'
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    cursor: 'pointer',
+    letterSpacing: '1px'
   }
 }

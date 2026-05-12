@@ -97,7 +97,7 @@ export const ACT8_NODES: Record<string, StoryNode> = {
       {
         id: 'a8_c1c_leave_note',
         text: '给互助群和下一届新生留下一段话',
-        nextNodeId: 'act8_final_choice',
+        nextNodeId: 'act8_connection_reflection',
         statusChanges: { reputation: 6, social: 6, mood: 8 },
         affectionChanges: { wang_laoshi: 6, dazhi: 5, xiaojie: 5, xuejie: 4 },
         setFlags: { leftFreshmanNote: true },
@@ -106,7 +106,7 @@ export const ACT8_NODES: Record<string, StoryNode> = {
       {
         id: 'a8_c1c_keep_silent',
         text: '什么也不写，只安静走完这段路',
-        nextNodeId: 'act8_final_choice',
+        nextNodeId: 'act8_connection_reflection',
         statusChanges: { mood: 5, energy: 4 },
         affectionChanges: { xiaojie: 2 },
         setFlags: { quietGraduationWalk: true },
@@ -115,11 +115,47 @@ export const ACT8_NODES: Record<string, StoryNode> = {
       {
         id: 'a8_c1c_call_teacher',
         text: '给王老师发消息，感谢这一路的求助路径',
-        nextNodeId: 'act8_final_choice',
+        nextNodeId: 'act8_connection_reflection',
         statusChanges: { mood: 10, reputation: 4, energy: -2 },
         affectionChanges: { wang_laoshi: 12 },
         setFlags: { thankedCounselor: true },
         narrativeText: '王老师过了几分钟回复："以后你也会成为别人的路径之一。"你看着这句话笑了很久。原来大学教你的不是永远独立，而是有一天能把别人曾经给你的帮助，换一种形式递出去。'
+      }
+    ]
+  },
+
+  act8_connection_reflection: {
+    id: 'act8_connection_reflection',
+    actId: 'act8',
+    title: '羁绊的余温',
+    description: '在最后的一段路上，一张张面孔在你脑海中掠过。你记起在大志深夜哭泣时递过去的那杯水，记起小杰揭开伤疤时的那个下午，记起小明在洗手间蹲在地上时的寂静，还有林雨薇在夕阳下那句没说完的话。这些瞬间并没有出现在你的成绩单或作品集里，却让你觉得这四年是真实活过的。那些原本只是名字的NPC，现在是你生命中不可磨灭的支点。',
+    location: '校园林荫道',
+    week: 77,
+    day: 7,
+    imagePrompt: '校园林荫道，深夜，路灯光影下的人影，回响着四年的人际关系与情感片段，电影感',
+    playerChoices: [
+      {
+        id: 'a8_reflect_deep',
+        text: '感激这些深刻的连接',
+        nextNodeId: 'act8_final_choice',
+        requiredFlags: { deepBondWithXuejie: true },
+        statusChanges: { mood: 12, social: 8 },
+        narrativeText: '你给林雨薇发了一条消息：\"学姐，保研后的课题还顺利吗？\"她回了一个笑脸：\"顺利。等你毕业，记得来实验室找我拿那杯奶茶。\"你握着手机笑了，你知道那不只是一杯奶茶。'
+      },
+      {
+        id: 'a8_reflect_roommates',
+        text: '与室友们最后碰一杯水',
+        nextNodeId: 'act8_final_choice',
+        requiredFlags: { reconnectedWithRoommates: true },
+        statusChanges: { social: 10, mood: 10 },
+        narrativeText: '大志、小明和小杰都在。大志说以后在北京租房找他，小明说他会把最新的考研资料寄给你。小杰只说了一句：\"308 永远不踢人。\"那一刻，你们都知道，即便以后不再同路，曾经的陪伴已是铠甲。'
+      },
+      {
+        id: 'a8_reflect_general',
+        text: '带着成长的平静走向礼堂',
+        nextNodeId: 'act8_final_choice',
+        statusChanges: { mood: 8, energy: 6 },
+        narrativeText: '你整理了一下学士服的领子。这一路走来，你学会了如何识破谎言，更学会了如何珍惜真实。你不再是那个害怕犯错的新生，而是一个知道如何修正方向的成年人。'
       }
     ]
   },

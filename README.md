@@ -10,15 +10,29 @@ Campus Survival Simulator - 基于 AI 大模型的校园生存模拟游戏
 npm install
 ```
 
-### 2. 配置 API Key
+### 2. 配置环境变量
 
-在项目根目录创建 `.env` 文件：
+复制环境模板文件，在项目根目录创建 `.env` 文件：
 
-```env
-VITE_DASHSCOPE_API_KEY=your_api_key_here
+```bash
+cp .env.example .env
 ```
 
-API Key 获取地址：https://dashscope.console.aliyun.com/
+在 `.env` 中填入你的 API Key 以及数据库配置（如有需要）：
+
+```env
+# 必填：阿里云百炼 (DashScope) API Key 
+VITE_DASHSCOPE_API_KEY=your_dashscope_api_key_here
+
+# 选填：MySQL 数据库配置（不填则默认使用无数据库的本地降级模式）
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ai_campus_survival
+MYSQL_USER=root
+MYSQL_PASSWORD=123456
+```
+
+- API Key 获取地址：[阿里云百炼控制台](https://dashscope.console.aliyun.com/)
 
 ### 3. 启动开发模式
 

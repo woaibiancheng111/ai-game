@@ -392,23 +392,25 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column' as const,
-    background: 'rgba(8,13,24,0.68)',
-    borderRadius: '12px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.34)',
+    background: 'rgba(20, 20, 35, 0.75)',
+    borderRadius: '24px',
+    border: '1px solid var(--color-border)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
     overflow: 'hidden',
     minHeight: 0,
-    backdropFilter: 'blur(14px)'
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)'
   },
   locationBar: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '12px',
-    padding: '10px 18px',
-    background: 'linear-gradient(90deg, rgba(8,13,24,0.98), rgba(15,23,42,0.88))',
-    borderBottom: '1px solid rgba(148,163,184,0.14)',
-    fontSize: '13px'
+    padding: '12px 24px',
+    background: 'linear-gradient(90deg, rgba(20,20,35,0.9), rgba(35,35,60,0.8))',
+    borderBottom: '1px solid rgba(124,106,247,0.3)',
+    fontSize: '14px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
   },
   locationLeft: {
     display: 'flex',
@@ -471,12 +473,12 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '780px'
   },
   narrationBox: {
-    background: 'linear-gradient(135deg, rgba(96,165,250,0.1), rgba(15,23,42,0.78))',
-    borderRadius: '10px',
-    padding: '15px 18px',
-    border: '1px solid rgba(96,165,250,0.18)',
+    background: 'linear-gradient(135deg, rgba(124,106,247,0.1), rgba(20,20,35,0.78))',
+    borderRadius: '16px',
+    padding: '16px 20px',
+    border: '1px solid rgba(124,106,247,0.3)',
     maxWidth: '92%',
-    boxShadow: '0 8px 20px rgba(0,0,0,0.14)',
+    boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
     animation: 'fadeIn 0.24s ease-out'
   },
   narrationKicker: {
@@ -506,11 +508,11 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end'
   },
   playerBubble: {
-    background: 'linear-gradient(135deg, rgba(37,99,235,0.95), rgba(20,184,166,0.92))',
-    borderRadius: '14px 14px 4px 14px',
-    padding: '12px 16px',
+    background: 'linear-gradient(135deg, var(--color-primary-dim), var(--color-primary))',
+    borderRadius: '20px 20px 4px 20px',
+    padding: '12px 20px',
     maxWidth: '70%',
-    boxShadow: '0 12px 28px rgba(20,184,166,0.14)'
+    boxShadow: '0 8px 24px rgba(124,106,247,0.3)'
   },
   playerText: {
     fontSize: '15px',
@@ -545,15 +547,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500
   },
   npcBubbleText: {
-    background: 'rgba(15,23,42,0.9)',
-    borderRadius: '14px 14px 14px 4px',
-    padding: '13px 16px',
-    border: '1px solid rgba(148,163,184,0.18)',
-    boxShadow: '0 12px 30px rgba(0,0,0,0.18)'
+    background: 'rgba(35,35,60,0.85)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    borderRadius: '20px 20px 20px 4px',
+    padding: '14px 20px',
+    border: '1px solid rgba(124,106,247,0.4)',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
   },
   npcBubbleStreaming: {
-    border: '1px solid rgba(45,212,191,0.28)',
-    boxShadow: '0 0 0 1px rgba(45,212,191,0.06), 0 10px 24px rgba(20,184,166,0.08)'
+    border: '1px solid var(--color-accent)',
+    boxShadow: '0 0 15px var(--color-accent-glow)'
   },
   npcText: {
     fontSize: '15px',
@@ -573,11 +577,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   educationCard: {
     width: 'min(760px, 92%)',
-    background: 'linear-gradient(135deg, rgba(45,212,191,0.1), rgba(15,23,42,0.88))',
-    border: '1px solid rgba(45,212,191,0.24)',
-    borderRadius: '10px',
-    padding: '16px 18px',
-    boxShadow: '0 10px 28px rgba(0,0,0,0.18)'
+    background: 'linear-gradient(135deg, rgba(124,106,247,0.15), rgba(20,20,35,0.88))',
+    border: '1px solid var(--color-primary-glow)',
+    borderRadius: '16px',
+    padding: '20px 24px',
+    boxShadow: '0 10px 28px rgba(0,0,0,0.5)'
   },
   educationHeader: {
     display: 'flex',
@@ -630,13 +634,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   systemBox: {
     maxWidth: '88%',
-    background: 'rgba(251,191,36,0.1)',
-    border: '1px solid rgba(251,191,36,0.22)',
-    borderRadius: '12px',
-    padding: '12px 14px',
-    color: '#fef3c7',
-    fontSize: '13px',
-    lineHeight: 1.6
+    background: 'rgba(0, 240, 255, 0.1)',
+    border: '1px solid rgba(0, 240, 255, 0.3)',
+    borderRadius: '16px',
+    padding: '14px 20px',
+    color: '#e8e8f0',
+    fontSize: '14px',
+    lineHeight: 1.6,
+    textShadow: '0 0 8px rgba(0, 240, 255, 0.4)'
   },
   loadingRow: {
     display: 'flex',

@@ -138,7 +138,7 @@ export const ACT4_NODES: Record<string, StoryNode> = {
       {
         id: 'a4_c2b_boundary',
         text: '和王老师一起写一版匿名传播规范',
-        nextNodeId: 'act4_club_project',
+        nextNodeId: 'act4_dazhi_confession',
         statusChanges: { reputation: 8, antiFraudAwareness: 8, mood: 3, energy: -6 },
         affectionChanges: { wang_laoshi: 10, xiaojie: 7, dazhi: 4 },
         setFlags: { wroteAnonymousSharingRule: true },
@@ -147,7 +147,7 @@ export const ACT4_NODES: Record<string, StoryNode> = {
       {
         id: 'a4_c2b_stop_rumor',
         text: '在班群里制止猜人名和玩梗',
-        nextNodeId: 'act4_club_project',
+        nextNodeId: 'act4_dazhi_confession',
         statusChanges: { social: 6, reputation: 6, mood: -2, antiFraudAwareness: 4 },
         affectionChanges: { dazhi: 10, xiaojie: 6, wang_laoshi: 5 },
         setFlags: { stoppedRumorSpread: true },
@@ -156,11 +156,134 @@ export const ACT4_NODES: Record<string, StoryNode> = {
       {
         id: 'a4_c2b_ignore_rumor',
         text: '不想再卷进去，假装没有看见',
-        nextNodeId: 'act4_club_project',
+        nextNodeId: 'act4_dazhi_confession',
         statusChanges: { mood: -6, reputation: -3, social: -2 },
         affectionChanges: { dazhi: -4, wang_laoshi: -2, xiaojie: -1 },
         setFlags: { ignoredSecondarySpread: true },
         narrativeText: '你把群聊静音，以为这样就能结束。可第二天大志在宿舍里更沉默了，你才发现沉默有时也会默认伤害继续发生。不是每一次不插手都叫尊重。'
+      }
+    ]
+  },
+
+  act4_dazhi_confession: {
+    id: 'act4_dazhi_confession',
+    actId: 'act4',
+    title: '大志的深夜',
+    description: '某天凌晨，你被一阵轻微的声音吵醒。不是大志的外放，而是他坐在床沿打电话，声音压得很低，像在跟谁解释什么。"妈，我没有乱花钱……我知道，我知道爸的店不好做……"电话挂了很久之后，他还坐在那里。你第一次看见大志不笑的样子，那张总是热闹的脸在手机光里显得很年轻，也很疲惫。你忽然明白，他为什么那么急于抓住每一个"机会"——不是贪心，是害怕辜负。',
+    location: '宿舍楼 308',
+    week: 11,
+    day: 6,
+    npcId: 'dazhi',
+    imagePrompt: '深夜宿舍，一个男生坐在床沿低声打电话，手机光照亮疲惫的脸，其他室友假装睡着，情感张力',
+    playerChoices: [
+      {
+        id: 'a4_dazhi_sit',
+        text: '坐到他旁边，不说话，只是陪着',
+        nextNodeId: 'act4_xiaojie_secret',
+        statusChanges: { social: 8, mood: 6 },
+        affectionChanges: { dazhi: 18 },
+        setFlags: { dazhiOpenedUp: true },
+        narrativeText: '你没有问他在哭什么，只是把水杯递过去。大志沉默了很久，然后说了一句你没想到的话："我爸的五金店今年亏了十几万，我妈让我别担心，可她说\'别担心\'的时候声音在抖。"他擦了擦脸，又说："所以那个兼职……我不是蠢，我只是太想快点赚到钱寄回去。"你第一次听见一个人把"差点被骗"说得这么心酸。你没有安慰他，因为那一刻任何安慰都太轻了。你们只是并排坐着，像两个还不太会当大人的人，在黑暗里分担了一点重量。'
+      },
+      {
+        id: 'a4_dazhi_practical',
+        text: '帮他一起查勤工助学和助学金申请',
+        nextNodeId: 'act4_xiaojie_secret',
+        statusChanges: { social: 6, antiFraudAwareness: 4, mood: 4 },
+        affectionChanges: { dazhi: 14, wang_laoshi: 4 },
+        setFlags: { helpedDazhiFinance: true },
+        narrativeText: '你把学校资助中心页面翻出来，和他一起看条件。大志嘴上说"我又不是申请不起"，手却已经在截图保存。你没有点破他的倔强，只说："先申请着，又不丢人。"第二天，他没有再在群里转那些来路不明的兼职广告。有些改变不是靠道理，是靠有人在你最不想承认困难的时候，安安静静帮你打开一个正规入口。'
+      },
+      {
+        id: 'a4_dazhi_pretend_sleep',
+        text: '假装没听见，翻身继续睡',
+        nextNodeId: 'act4_xiaojie_secret',
+        statusChanges: { mood: -4, social: -3 },
+        affectionChanges: { dazhi: -2 },
+        setFlags: { missedDazhiMoment: true },
+        narrativeText: '你翻了个身，假装呼吸均匀。大志的电话声停了，宿舍重新安静下来。第二天他照常大笑、照常抢食堂最后一个鸡腿。可你总觉得那天晚上错过了什么——不是一次帮忙的机会，而是一次真正了解一个人的窗口。那扇窗很小，错过之后不一定会再打开。'
+      }
+    ]
+  },
+
+  act4_xiaojie_secret: {
+    id: 'act4_xiaojie_secret',
+    actId: 'act4',
+    title: '沉默者的来路',
+    description: '讨论手册内容时，小杰负责写"被骗后怎么办"那一页。他写得异常详细：怎么截图、怎么找客服冻结、怎么报警、怎么跟家人开口。你说这也太专业了吧，像亲身经历过。小杰停下打字的手，沉默了几秒——那几秒的沉默，比他平时所有的沉默都更重。',
+    location: '图书馆讨论室',
+    week: 12,
+    day: 1,
+    npcId: 'xiaojie',
+    imagePrompt: '图书馆讨论室，一个戴帽衫的男生对着电脑屏幕停住，旁边同学安静注视，情感暗涌',
+    playerChoices: [
+      {
+        id: 'a4_xiaojie_ask',
+        text: '轻声问他：是不是有什么事想说',
+        nextNodeId: 'act4_xuejie_tired',
+        statusChanges: { social: 6, mood: 4 },
+        affectionChanges: { xiaojie: 20 },
+        setFlags: { xiaojieRevealedPast: true },
+        narrativeText: '小杰摘下帽子，露出少见的表情——不是冷静，是忍着什么。"我妈……高一那年被电话诈骗骗了八万。"他说得很平，像在念别人的故事。"她不敢告诉我爸，自己扛了半年，头发白了一大片。后来还是我发现转账记录……"他把屏幕转向你，上面写着"被骗后不要独自承受"。"这句话不是我编的，是我从那年开始就想对我妈说的。"你看着他的眼睛，第一次理解为什么他总是第一个说"先截图"。那不是性格冷静，那是一个少年用了三年时间把愤怒和心疼磨成的本能。'
+      },
+      {
+        id: 'a4_xiaojie_space',
+        text: '不追问，只说：你写的这页，一定能帮到很多人',
+        nextNodeId: 'act4_xuejie_tired',
+        statusChanges: { mood: 5, reputation: 3 },
+        affectionChanges: { xiaojie: 14 },
+        setFlags: { respectedXiaojieBoundary: true },
+        narrativeText: '小杰点了点头，重新戴上帽子，继续打字。他没有说更多，但那天"被骗后怎么办"那一页写得比任何部分都扎实。你没有问他为什么，因为有些事不需要被讲出来才存在。他把那一页命名为"给还不敢开口的人"。'
+      },
+      {
+        id: 'a4_xiaojie_joke',
+        text: '开玩笑说他是不是看多了反诈纪录片',
+        nextNodeId: 'act4_xuejie_tired',
+        statusChanges: { mood: -2, social: -2 },
+        affectionChanges: { xiaojie: -8 },
+        setFlags: { misjudgedXiaojie: true },
+        narrativeText: '小杰的笑容很短，像一扇被风吹开又立刻关上的窗。他说"差不多吧"，声音恢复了平时的距离感。你后来才明白，有些玩笑不是伤害，只是把一个人正准备交出的信任轻轻推了回去。他那天之后写完了整页内容，但再也没有主动提起那个停顿。'
+      }
+    ]
+  },
+
+  act4_xuejie_tired: {
+    id: 'act4_xuejie_tired',
+    actId: 'act4',
+    title: '学姐也会累',
+    description: '手册讨论结束后，你在图书馆门口碰见林雨薇。她没有像往常一样先递给你学习建议，而是靠在走廊墙上，眼镜推到额头上，盯着手机发呆。屏幕上是一封导师的邮件。你叫她名字时，她愣了一下才回过神来——你第一次看见她反应慢半拍的样子。那个永远温柔、永远稳当的学姐，原来也有被什么东西压着喘不上气的时刻。',
+    location: '图书馆走廊',
+    week: 12,
+    day: 2,
+    npcId: 'xuejie',
+    imagePrompt: '大学图书馆走廊黄昏，戴眼镜的女生靠墙发呆看手机，旁边学弟犹豫要不要上前，柔和光影',
+    playerChoices: [
+      {
+        id: 'a4_xuejie_care',
+        text: '请她喝杯热饮，安静坐一会儿',
+        nextNodeId: 'act4_club_project',
+        statusChanges: { social: 5, mood: 8, energy: -3 },
+        affectionChanges: { xuejie: 20 },
+        setFlags: { caredForXuejie: true, sawXuejieVulnerable: true },
+        narrativeText: '你去自动贩卖机买了两杯热可可。林雨薇接过来的时候笑了一下，那种笑不是礼貌，是真的松了口气。她说导师让她重做一组实验数据，保研名额可能不够稳。"我跟你们说\'别急\'，其实我自己也很急。"你第一次意识到，那些一直在帮你的人，并不是因为她们不需要帮助，而是没有人停下来问她们还好吗。那杯热可可不贵，但那十分钟的安静，是你第一次从被照顾的人变成照顾别人的人。'
+      },
+      {
+        id: 'a4_xuejie_encourage',
+        text: '认真地说：学姐帮了我们很多，轮到我们了',
+        nextNodeId: 'act4_club_project',
+        statusChanges: { social: 4, mood: 6, reputation: 3 },
+        affectionChanges: { xuejie: 16 },
+        setFlags: { encouragedXuejie: true, sawXuejieVulnerable: true },
+        narrativeText: '林雨薇推了推眼镜，嘴角动了动，像是想说"不用"，但最后只说了一个"嗯"。那是你听过她最短的一句话，也是最诚实的。她后来在学习群里发了一条很少见的消息："最近我也有点累，大家互相照顾。"群里一下子冒出很多人回复"学姐辛苦了"。你忽然明白，承认疲惫有时候不是示弱，是给周围的人一个靠近的入口。'
+      },
+      {
+        id: 'a4_xuejie_miss',
+        text: '怕打扰她，假装没看见，走了',
+        nextNodeId: 'act4_club_project',
+        statusChanges: { mood: -3 },
+        affectionChanges: { xuejie: -3 },
+        setFlags: { missedXuejieMoment: true },
+        narrativeText: '你低头走过，觉得自己不够资格关心一个比你厉害很多的人。可回到宿舍后，你翻来覆去想的不是作业，而是她靠在墙上的样子。你终于承认，回避不总是尊重，有时候它只是害怕自己的关心不够好。可关心本来就不需要够好，只需要在那里。'
       }
     ]
   },

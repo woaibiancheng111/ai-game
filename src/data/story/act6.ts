@@ -65,7 +65,7 @@ export const ACT6_NODES: Record<string, StoryNode> = {
       {
         id: 'a6_c2_deep_work',
         text: '减少活动，集中把项目做扎实',
-        nextNodeId: 'act6_midterm_feedback',
+        nextNodeId: 'act6_roommate_drift',
         statusChanges: { gpa: 0.18, reputation: 6, social: -4, energy: -10 },
         affectionChanges: { xiaoming: 10, xuejie: 8, dazhi: -4 },
         setFlags: { projectDeepWork: true },
@@ -74,7 +74,7 @@ export const ACT6_NODES: Record<string, StoryNode> = {
       {
         id: 'a6_c2_collaborate',
         text: '拉上室友和同学一起做成团队项目',
-        nextNodeId: 'act6_midterm_feedback',
+        nextNodeId: 'act6_roommate_drift',
         statusChanges: { social: 12, reputation: 10, energy: -14, mood: 6 },
         affectionChanges: { dazhi: 10, xiaojie: 10, xiaoming: 6 },
         setFlags: { projectTeamBuilt: true },
@@ -83,11 +83,93 @@ export const ACT6_NODES: Record<string, StoryNode> = {
       {
         id: 'a6_c2_overpromise',
         text: '答应太多任务，试图证明自己全能',
-        nextNodeId: 'act6_midterm_feedback',
+        nextNodeId: 'act6_roommate_drift',
         statusChanges: { reputation: -4, energy: -22, mood: -14, gpa: -0.08 },
         affectionChanges: { xuejie: -4, xiaoming: -3, dazhi: 2 },
         setFlags: { overpromisedProject: true },
         narrativeText: '你同时接了三个任务，消息列表像雪片一样压下来。到了截止日前夜，你终于承认：忙碌不等于可靠。很多过载不是被别人强加的，而是自己舍不得说不。'
+      }
+    ]
+  },
+
+  act6_roommate_drift: {
+    id: 'act6_roommate_drift',
+    actId: 'act6',
+    title: '渐行渐远',
+    description: '大二下学期的某个晚上，你们难得四个人都在宿舍。可 308 不像从前那样热闹了。大志戴着耳机剪视频，嘴里哼着你不认识的歌；小明在看考研经验帖，桌上摆满了你没见过的辅导书；小杰的屏幕上是一个你不了解的技术社区。你打开手机想说点什么，发现上一条宿舍群消息是三天前。你们没有吵架，没有冷战，只是在不知不觉中各自走远了一步。那种距离不痛，却让你在某个瞬间很想念大一那个挤在一张桌子上吃泡面的晚上。',
+    location: '宿舍楼 308',
+    week: 25,
+    day: 5,
+    npcId: 'dazhi',
+    imagePrompt: '大学宿舍夜晚，四个人各忙各的，戴耳机、看书、敲键盘、看手机，安静中有疏离感',
+    playerChoices: [
+      {
+        id: 'a6_drift_dinner',
+        text: '提议周末一起去吃顿好的，像大一那样',
+        nextNodeId: 'act6_xiaoming_breakdown',
+        statusChanges: { social: 10, mood: 8, energy: -4 },
+        affectionChanges: { dazhi: 10, xiaojie: 8, xiaoming: 6 },
+        setFlags: { reconnectedWithRoommates: true },
+        narrativeText: '你在群里发了一句：\"周六晚上出去吃？我请。\"大志秒回一个叹号，小杰发了个\"行\"字，小明犹豫了一下说\"那我把书放一放\"。那顿饭没有聊什么大事，只是互相吐槽了各自踩的坑。大志说学生会比想象中累，小明说考研帖越看越焦虑，小杰突然说了一句你们都没想到的话：\"其实我挺想念大一那会儿的。\"桌上安静了几秒，然后你们都笑了。成长不可能不走散，但偶尔回头看看彼此，也是一种不需要说出口的承诺。'
+      },
+      {
+        id: 'a6_drift_accept',
+        text: '在心里接受这种变化，各自成长也没什么不好',
+        nextNodeId: 'act6_xiaoming_breakdown',
+        statusChanges: { mood: 2, energy: 4 },
+        affectionChanges: { xiaojie: 4 },
+        setFlags: { acceptedRoommateDrift: true },
+        narrativeText: '你关掉手机，想了想，觉得也许这就是长大。不是所有关系都要维持最初的温度，有些人会在某个路口自然地走到不同方向去。你把这种理解写进日记：\"朋友不是永远在一起，是需要的时候知道还能找到。\"可这句话写完之后，你又多看了一眼宿舍群，确认自己没有错过什么消息。原来接受和想念可以同时存在。'
+      },
+      {
+        id: 'a6_drift_sad',
+        text: '有点难过，但不知道该怎么开口',
+        nextNodeId: 'act6_xiaoming_breakdown',
+        statusChanges: { mood: -6, social: -3 },
+        affectionChanges: { dazhi: -2, xiaoming: -2 },
+        setFlags: { silentAboutDrift: true },
+        narrativeText: '你把想说的话打了又删，删了又打，最后什么也没发。那种感觉很难描述——不是被抛弃，更像是列车到站时，有人已经站起来拿行李了，而你还坐在座位上看窗外。你后来在手册的高年级补充页里加了一行：\"如果你发现室友慢慢变远了，那不是谁的错。但如果你想念他们，就说出来。沉默不会自动变成默契，有时候它只会变成遗憾。\"'
+      }
+    ]
+  },
+
+  act6_xiaoming_breakdown: {
+    id: 'act6_xiaoming_breakdown',
+    actId: 'act6',
+    title: '完美主义的裂缝',
+    description: '某天深夜，你听见洗手间有水声持续了很久。推开门，看见小明蹲在地上，手里攥着一张揉皱的成绩单。他的竞赛初赛没过。你从没见过他这个样子——那个永远整齐、永远有计划、永远把错题本分成三色标签的人，正在水龙头旁边发呆，像一台终于过热停机的机器。你这才意识到，他所有的秩序和自律不是因为不会累，而是因为太害怕失控。',
+    location: '宿舍楼洗手间',
+    week: 26,
+    day: 1,
+    npcId: 'xiaoming',
+    imagePrompt: '深夜宿舍洗手间，一个男生蹲在地上看着揉皱的纸，水龙头还开着，旁边室友推门进来，安静压抑',
+    playerChoices: [
+      {
+        id: 'a6_xiaoming_sit',
+        text: '关掉水龙头，蹲下来陪他',
+        nextNodeId: 'act6_midterm_feedback',
+        statusChanges: { social: 8, mood: 6 },
+        affectionChanges: { xiaoming: 22 },
+        setFlags: { supportedXiaomingBreakdown: true },
+        narrativeText: '你关掉水龙头，蹲下来。小明很久没说话，然后声音很小地说：\"我从小到大没有拿过第二名以外的成绩。\"他停了停，\"可是到了大学，第二名什么都不是。\"你没有说\"没关系\"或\"下次加油\"，因为你知道这些话对一个从来不允许自己失败的人来说毫无意义。你只说了一句：\"那你现在是什么感觉？\"他想了很久，说：\"累。\"就一个字。可那个字像他从未对任何人说出口的秘密。你们坐在冰凉的地砖上，谁也没动。那大概是 308 最安静的一个深夜，也是你第一次觉得陪伴比所有道理都管用。'
+      },
+      {
+        id: 'a6_xiaoming_normalize',
+        text: '告诉他你也有过类似的崩溃时刻',
+        nextNodeId: 'act6_midterm_feedback',
+        statusChanges: { social: 6, mood: 4, reputation: 2 },
+        affectionChanges: { xiaoming: 16 },
+        setFlags: { sharedVulnerabilityWithXiaoming: true },
+        narrativeText: '你说自己大一差点被骗的时候也觉得天塌了，觉得自己不够聪明。小明听完愣了一下，然后问了一个你没想到的问题：\"那你后来是怎么不再觉得自己很蠢的？\"你想了想，诚实地回答：\"我没有。我只是学会了在觉得自己蠢的时候不做重要决定。\"小明看着你，第一次露出一个不是礼貌的笑容。\"你这个人，有时候说话还挺有用的。\"那天之后，他的错题本多了一种颜色——不是标记错误的红色，而是标记\"允许自己不会\"的蓝色。'
+      },
+      {
+        id: 'a6_xiaoming_give_space',
+        text: '不打扰他，默默离开，明天再看他状态',
+        nextNodeId: 'act6_midterm_feedback',
+        statusChanges: { mood: -3 },
+        affectionChanges: { xiaoming: -4 },
+        setFlags: { leftXiaomingAlone: true },
+        narrativeText: '你轻轻关上门，觉得也许他需要自己消化。第二天他像什么都没发生过一样，错题本整齐，笔记工整，和你说话时语气如常。可你注意到他的水杯旁边放了一片安眠药的铝箔板。你心里突然很不安——也许有些独处不是消化，而是一个人把裂缝抹平了继续走，只是走得越来越用力。你在手册的心理支持页加了一句：\"如果你的朋友深夜崩溃过一次然后假装没事，别真的相信「没事」。\"'
       }
     ]
   },

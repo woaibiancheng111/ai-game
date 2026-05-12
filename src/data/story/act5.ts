@@ -56,7 +56,7 @@ export const ACT5_NODES: Record<string, StoryNode> = {
       {
         id: 'a5_c1b_sleep_plan',
         text: '按复习表推进，保留睡眠和运动',
-        nextNodeId: 'act5_family_call',
+        nextNodeId: 'act5_winter_loneliness',
         statusChanges: { gpa: 0.16, energy: -8, mood: 8, antiFraudAwareness: 4 },
         affectionChanges: { xiaoming: 10, xuejie: 6 },
         setFlags: { finalsSleepPlan: true },
@@ -65,7 +65,7 @@ export const ACT5_NODES: Record<string, StoryNode> = {
       {
         id: 'a5_c1b_ai_boundary',
         text: '把 AI 当助教，只问思路不代写',
-        nextNodeId: 'act5_family_call',
+        nextNodeId: 'act5_winter_loneliness',
         statusChanges: { gpa: 0.12, antiFraudAwareness: 6, reputation: 4, energy: -6 },
         affectionChanges: { xuejie: 7, wang_laoshi: 5, xiaoming: 4 },
         setFlags: { healthyAIToolUse: true },
@@ -74,11 +74,90 @@ export const ACT5_NODES: Record<string, StoryNode> = {
       {
         id: 'a5_c1b_last_minute',
         text: '临时抱佛脚，刷经验帖找捷径',
-        nextNodeId: 'act5_family_call',
+        nextNodeId: 'act5_winter_loneliness',
         statusChanges: { gpa: -0.06, mood: -10, energy: -18, trust: 6 },
         affectionChanges: { xiaoming: -4, xuejie: -3, dazhi: 3 },
         setFlags: { lastMinutePanic: true },
         narrativeText: '你在经验帖和资料群之间反复横跳，收藏夹越来越满，真正写进脑子里的东西却不多。凌晨三点，你突然意识到焦虑也会伪装成努力，甚至比真正努力更耗电。'
+      }
+    ]
+  },
+
+  act5_winter_loneliness: {
+    id: 'act5_winter_loneliness',
+    actId: 'act5',
+    title: '冬夜独白',
+    description: '考试周前的某个周末，宿舍突然空了。大志回家拿冬装，小明去自习室包场，小杰说去网吧但你知道他只是不想待在这里。你第一次独自面对 308，床上的被子卷着，桌上的水杯积了一圈水渍，窗外的梧桐只剩枝丫。安静像一面放大镜，把平时用忙碌盖住的东西一样一样照出来：你到底够不够好？你有没有真的在成长？那些帮过你的人，是把你当朋友还是只是顺手？你抱着手机坐了很久，想发消息却不知道发给谁——直到你意识到，孤独不是没有人在身边，而是不确定自己值不值得被想念。',
+    location: '宿舍楼 308',
+    week: 15,
+    day: 6,
+    imagePrompt: '冬日空荡大学宿舍，只有一个人坐在床上抱着手机，窗外枯枝和灰色天空，安静孤独的氛围',
+    playerChoices: [
+      {
+        id: 'a5_lonely_write',
+        text: '打开笔记本，把此刻的感受写下来',
+        nextNodeId: 'act5_xuejie_farewell',
+        statusChanges: { mood: 6, antiFraudAwareness: 4 },
+        setFlags: { wroteWinterReflection: true },
+        narrativeText: '你写下：\"我不确定自己在变好还是在假装变好。\"写完之后反而松了口气。把不安写出来不会让它消失，但至少让你看清楚它的形状——它没有你以为的那么大。你又翻开新生手册草稿，在心理支持那一页加了一行：\"如果你在某个安静的晚上突然觉得自己不够好，那很正常。这不是真相，只是疲惫在说谎。\"'
+      },
+      {
+        id: 'a5_lonely_call_xuejie',
+        text: '犹豫了很久，给学姐发了一条消息',
+        nextNodeId: 'act5_xuejie_farewell',
+        statusChanges: { social: 6, mood: 8 },
+        affectionChanges: { xuejie: 10 },
+        setFlags: { reachedOutWhenLonely: true },
+        narrativeText: '你编辑了五分钟才发出去一句：\"学姐，你最近还好吗？\"林雨薇回得很快：\"还行，在改论文。你呢？\"你没有说自己很好，而是说：\"有点空。\"她没有发鸡汤，只发来一张图书馆窗边的照片，附了一句：\"我也是。但空的时候想一想自己还在这里，也不错。\"那天晚上你没有再刷手机，而是把那张照片保存了下来。有时候对抗孤独的不是热闹，而是知道某个地方有人也在安静地撑着。'
+      },
+      {
+        id: 'a5_lonely_scroll',
+        text: '刷了一整晚朋友圈和短视频',
+        nextNodeId: 'act5_xuejie_farewell',
+        statusChanges: { mood: -10, energy: -12 },
+        setFlags: { escapedLonelinessOnline: true },
+        narrativeText: '你从晚上八点刷到凌晨一点。别人的考研上岸、旅行打卡和恋爱撒糖像一条条闪光的绳子，把你绑在屏幕前，也把你的自信一根根抽走。放下手机的时候，眼睛酸得厉害，心里更空。你后来在手册的心理支持页加了一句话：\"低落的时候少刷朋友圈。别人的高光不是你的判决书。\"那是你用一个失眠的夜晚换来的一行字。'
+      }
+    ]
+  },
+
+  act5_xuejie_farewell: {
+    id: 'act5_xuejie_farewell',
+    actId: 'act5',
+    title: '学姐的答案',
+    description: '期末考试最后一天，你在教学楼台阶上看见林雨薇。她手里拿着打印出来的保研材料，风把几张纸吹歪了。你想帮她捡，走近了才看见她眼圈有点红——不是哭，更像是很久没有好好睡过。她看见你，先问的不是自己的事：\"最后一科准备得怎么样？\"你忽然觉得很心疼。一个连自己都快撑不住的人，第一反应还是先关心别人。',
+    location: '教学楼台阶',
+    week: 16,
+    day: 4,
+    npcId: 'xuejie',
+    imagePrompt: '冬日大学教学楼台阶，女生拿着保研材料被风吹散，男生弯腰帮忙捡，温暖又微苦的告别感',
+    playerChoices: [
+      {
+        id: 'a5_xuejie_honest',
+        text: '帮她捡纸，然后说：学姐，你先别管我了，你自己呢？',
+        nextNodeId: 'act5_family_call',
+        statusChanges: { social: 8, mood: 10 },
+        affectionChanges: { xuejie: 22 },
+        setFlags: { xuejieSharedResult: true, deepBondWithXuejie: true },
+        narrativeText: '林雨薇愣了一下，然后笑了——那种笑里有疲惫，也有释然。\"名额够了，但导师希望我换个方向。我还没想好。\"她把纸捏了捏，又说：\"其实我一直很怕，怕自己不够好。我帮你们的时候反而不怕，好像只要有人需要我，我就有理由继续努力。\"你站在风里听着，突然明白她所有的温柔里藏着多少不安。你说了一句不太像你会说的话：\"学姐，你不用一直帮别人才有理由对自己好。\"她没有回答，只是看了你很久，然后说：\"嗯。谢谢你。\"那个\"谢谢\"很轻，却像是她对自己说了很久没能说出口的话。'
+      },
+      {
+        id: 'a5_xuejie_gift',
+        text: '把自己手写的感谢卡和手册里她的那一页给她看',
+        nextNodeId: 'act5_family_call',
+        statusChanges: { social: 6, mood: 8, reputation: 4 },
+        affectionChanges: { xuejie: 18 },
+        setFlags: { xuejieSharedResult: true, gaveXuejieGift: true },
+        narrativeText: '你把手册翻到学习适应那一页——上面写满了她教过你的东西，旁边还歪歪扭扭画了一颗星。林雨薇看了很久，把眼镜摘下来擦了擦。\"你知道吗，我有时候觉得我帮你们，其实也是在帮过去那个害怕的自己。\"她轻声说保研名额拿到了，但实验还要重做。你没有说恭喜，只说了一句：\"学姐加油，这次换我们给你说别急了。\"她笑出了声，那个笑声在冬天的空气里很短，却很暖。'
+      },
+      {
+        id: 'a5_xuejie_nod',
+        text: '点点头说准备得还行，然后各自离开',
+        nextNodeId: 'act5_family_call',
+        statusChanges: { mood: 2 },
+        affectionChanges: { xuejie: 4 },
+        setFlags: { briefXuejieFarewell: true },
+        narrativeText: '你说考得还行，她说保研差不多了。你们都没有展开，像两个已经习惯了把重要的话压在嘴边的人。走远之后你回头看了一眼，她还站在台阶上整理那些被风吹乱的纸。你想折回去说点什么，但脚步没有停下来。后来你在手册的最后一页加了一句：\"如果你遇到一个愿意在自己最忙的时候帮你的人，记得也去问她还好吗。\"那是你写给未来新生的，也是写给此刻的自己的。'
       }
     ]
   },
