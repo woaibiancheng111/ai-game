@@ -678,41 +678,6 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     alignItems: 'center'
   },
-  spriteWrapper: {
-    position: 'absolute',
-    bottom: '-20px', // 让立绘稍微下沉一点
-    left: '50%',
-    transform: 'translateX(-50%)',
-    height: '110%',
-    zIndex: 5,
-    pointerEvents: 'none'
-  },
-  spriteImage: {
-    height: '100%',
-    width: 'auto',
-    objectFit: 'contain',
-    animation: 'spriteEntry 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-    filter: 'drop-shadow(0 10px 40px rgba(0,0,0,0.8))',
-    mixBlendMode: 'multiply' as any,
-    transformOrigin: 'bottom center'
-  },
-  messageZone: {
-    height: '45%', // 固定对话区高度
-    width: '100%',
-    background: 'linear-gradient(to bottom, rgba(13,13,26,0.3) 0%, rgba(13,13,26,0.9) 20%, rgba(13,13,26,0.95) 100%)',
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    position: 'relative',
-    zIndex: 10
-  },
-  scrollArea: {
-    height: '100%',
-    overflowY: 'auto' as const,
-    padding: '24px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '20px',
-    scrollbarWidth: 'none' as const
-  },
   bottomAnchor: {
     width: '100%',
     height: '1px',
