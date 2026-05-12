@@ -16,6 +16,7 @@ import { canEnterNode, CHAPTERS, getChapterStartNode, getFirstNode, getNodeChoic
 import { AUTOSAVE_KEY, AUTOSAVE_SLOT_ID, UNLOCKED_ACTS_KEY, createSaveData } from '../engine/save'
 import { getMessagesRevealDelay } from './utils/revealTiming'
 import { getUnlockedAchievementIds } from '../engine/achievements'
+import { soundEngine } from '../services/soundEngine'
 
 const getBackgroundImage = (location: string) => {
   if (!location) return 'linear-gradient(135deg, #0b0b18 0%, #1a1040 100%)';
@@ -50,7 +51,30 @@ export default function App() {
   const [choices, setChoices] = useState<PlayerChoice[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRevealing, setIsRevealing] = useState(false)
+  const [skipReveal, setSkipReveal] = useState(false)
   const [statusPanelOpen, setStatusPanelOpen] = useState(false)
+
+  useEffect(() => {
+    if (phase !== 'playing' || !gameState.currentLocation) {
+      if (phase === 'menu') {
+        soundEngine.playBGM('/audio/menu_theme.mp3');
+      } else {
+        soundEngine.stopBGM();
+      }
+      return;
+    }
+
+    const loc = gameState.currentLocation.toLowerCase();
+    if (loc.includes('宿舍')) {
+      soundEngine.playBGM('/audio/daily_life.mp3');
+    } else if (loc.includes('教室') || loc.includes('图书馆')) {
+      soundEngine.playBGM('/audio/study_focus.mp3');
+    } else if (loc.includes('深夜') || loc.includes('暗') || loc.includes('哭')) {
+      soundEngine.playBGM('/audio/emotional_deep.mp3');
+    } else {
+      soundEngine.playBGM('/audio/campus_ambient.mp3');
+    }
+  }, [phase, gameState.currentLocation]);
 
   const persistAutosave = useCallback(async (nextState: GameState, nextMessages: ConversationMessage[]) => {
     try {
@@ -608,6 +632,7 @@ export default function App() {
     setChoices([])
     setIsLoading(false)
     setIsRevealing(false)
+    setSkipReveal(false)
     setStatusPanelOpen(false)
   }, [])
 
@@ -623,12 +648,14 @@ export default function App() {
     }
 
     const node = getStoryNode(resolvedSave.gameState.currentNode) ?? getFirstNode()
+    setSkipReveal(true)
     setPhase('playing')
     setGameState(resolvedSave.gameState)
     setCurrentNode(node)
     const savedMessages = resolvedSave.conversationHistories.main ?? []
     setMessages(savedMessages)
     setChoices(getNodeChoices(node, resolvedSave.gameState))
+    setTimeout(() => setSkipReveal(false), 100)
   }, [currentProfile])
 
   const handleLoadSave = useCallback(async (slotId: string) => {
@@ -642,12 +669,14 @@ export default function App() {
     }
 
     const node = getStoryNode(saveData.gameState.currentNode) ?? getFirstNode()
+    setSkipReveal(true)
     setPhase('playing')
     setGameState(saveData.gameState)
     setCurrentNode(node)
     const savedMessages = saveData.conversationHistories.main ?? []
     setMessages(savedMessages)
     setChoices(getNodeChoices(node, saveData.gameState))
+    setTimeout(() => setSkipReveal(false), 100)
   }, [currentProfile])
 
   const handleManualSave = useCallback(async () => {
@@ -794,6 +823,7 @@ export default function App() {
           node={currentNode}
           messages={messages}
           isLoading={isLoading}
+          skipReveal={skipReveal}
           sceneImageUrl={gameState.currentSceneImageUrl}
           onTypingChange={setIsRevealing}
         />

@@ -1,45 +1,51 @@
 import type { ConversationMessage } from '../../data/types'
 
 const ROLE_BASE_DELAY: Record<ConversationMessage['role'], number> = {
-  player: 360,
-  npc: 420,
-  system: 520,
-  narration: 420,
-  education: 820
+  player: 300,
+  npc: 400,
+  system: 500,
+  narration: 600,
+  education: 800
 }
 
 const ROLE_PER_CHAR_DELAY: Record<ConversationMessage['role'], number> = {
-  player: 8,
-  npc: 10,
-  system: 12,
-  narration: 5,
-  education: 14
+  player: 15,
+  npc: 20,
+  system: 20,
+  narration: 25,
+  education: 15
 }
 
 const ROLE_MAX_DELAY: Record<ConversationMessage['role'], number> = {
-  player: 900,
-  npc: 1500,
-  system: 1800,
-  narration: 1350,
-  education: 3000
+  player: 1200,
+  npc: 2500,
+  system: 2000,
+  narration: 3000,
+  education: 4000
 }
 
-export function getMessageRevealDelay(message: Pick<ConversationMessage, 'role' | 'content'> | undefined, isFirstMessage = false): number {
+/**
+ * 获取一条消息所需的阅读时间（毫秒）。
+ * 下一条消息将在等待这个时间后才会弹出。
+ */
+export function getMessageRevealDelay(message: Pick<ConversationMessage, 'role' | 'content'> | undefined): number {
   if (!message) {
-    return 320
+    return 300
   }
 
   const baseDelay = ROLE_BASE_DELAY[message.role]
   const perCharDelay = ROLE_PER_CHAR_DELAY[message.role]
   const maxDelay = ROLE_MAX_DELAY[message.role]
   const contentLength = message.content.trim().length
-  const firstMessageAdjustment = isFirstMessage ? -220 : 0
 
-  return Math.max(220, Math.min(maxDelay, baseDelay + contentLength * perCharDelay + firstMessageAdjustment))
+  return Math.max(300, Math.min(maxDelay, baseDelay + contentLength * perCharDelay))
 }
 
+/**
+ * 汇总一批消息的总阅读时间，用于在 App 层控制流程阻塞时间。
+ */
 export function getMessagesRevealDelay(messages: ConversationMessage[]): number {
-  return messages.reduce((total, message, index) => {
-    return total + getMessageRevealDelay(message, index === 0)
+  return messages.reduce((total, message) => {
+    return total + getMessageRevealDelay(message)
   }, 0)
 }

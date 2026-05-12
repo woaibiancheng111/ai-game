@@ -9,6 +9,8 @@ interface DialogueBoxProps {
   isLoading: boolean
   sceneImageUrl?: string
   onTypingChange?: (typing: boolean) => void
+  skipReveal?: boolean
+  spriteUrl?: string | null
 }
 
 interface MessageItemProps {
@@ -17,28 +19,20 @@ interface MessageItemProps {
   onNpcTypingTick: () => void
 }
 
-const NPC_TYPEWRITER_RECENT_WINDOW_MS = 12000
 const NPC_TYPEWRITER_BASE_DELAY = 24
 
-export default function DialogueBox({ node, messages, isLoading, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
+export default function DialogueBox({ node, messages, isLoading, skipReveal, spriteUrl, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const previousMessageIds = useRef<string[]>([])
   const scrollFrame = useRef<number | null>(null)
-  const [visibleMessageCount, setVisibleMessageCount] = useState(0)
+  const [visibleMessageCount, setVisibleMessageCount] = useState(messages.length)
   const [typingNpcMessageIds, setTypingNpcMessageIds] = useState<Record<string, boolean>>({})
   const messageIds = useMemo(() => messages.map(msg => msg.id), [messages])
   const messageSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}`).join('|'), [messages])
   const messageRevealSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}:${msg.isStreaming ? 'streaming' : 'static'}`).join('|'), [messages])
-  const nextMessageRevealKey = useMemo(() => {
-    const message = messages[visibleMessageCount]
-    if (!message) {
-      return 'none'
-    }
+  const lastRevealTimeRef = useRef<number>(Date.now())
 
-    const contentKey = message.isStreaming ? 'streaming-content' : message.content.length
-    return `${message.id}:${message.role}:${message.isStreaming ? 'streaming' : 'static'}:${contentKey}`
-  }, [messageRevealSignature, messages, visibleMessageCount])
   const visibleContentSignature = useMemo(
     () => messages
       .slice(0, visibleMessageCount)
@@ -103,14 +97,16 @@ export default function DialogueBox({ node, messages, isLoading, sceneImageUrl, 
     const previousIds = previousMessageIds.current
     const isSamePrefix = previousIds.every((id, index) => messageIds[index] === id)
 
-    if (!isSamePrefix || messageIds.length < previousIds.length) {
+    if (skipReveal) {
+      setVisibleMessageCount(messages.length)
+    } else if (!isSamePrefix || messageIds.length < previousIds.length) {
       setVisibleMessageCount(0)
     } else {
       setVisibleMessageCount(prev => Math.min(prev, messages.length))
     }
 
     previousMessageIds.current = messageIds
-  }, [messageIds, messages.length])
+  }, [messageIds, messages.length, skipReveal])
 
   useEffect(() => {
     const visibleIds = new Set(visibleMessageIdSignature ? visibleMessageIdSignature.split('|') : [])
@@ -136,14 +132,25 @@ export default function DialogueBox({ node, messages, isLoading, sceneImageUrl, 
       return
     }
 
-    const messageToReveal = messages[visibleMessageCount]
-    const delay = getMessageRevealDelay(messageToReveal, visibleMessageCount === 0)
+    const previousMessage = visibleMessageCount > 0 ? messages[visibleMessageCount - 1] : null
+    let requiredDelay = 0
+    if (previousMessage && !previousMessage.isStreaming) {
+      requiredDelay = getMessageRevealDelay(previousMessage)
+    } else if (previousMessage?.isStreaming) {
+      requiredDelay = 40
+    }
+
+    // 如果之前的消息很久以前就显示了，就不要再等了（比如刚点击选项，第一句话应该立刻出来）
+    const timeSinceLastReveal = Date.now() - lastRevealTimeRef.current
+    const remainingDelay = skipReveal ? 0 : Math.max(0, requiredDelay - timeSinceLastReveal)
+
     const timer = window.setTimeout(() => {
       setVisibleMessageCount(prev => Math.min(messages.length, prev + 1))
-    }, messageToReveal?.isStreaming ? 40 : delay)
+      lastRevealTimeRef.current = Date.now()
+    }, remainingDelay)
 
     return () => window.clearTimeout(timer)
-  }, [nextMessageRevealKey, messages.length, visibleMessageCount])
+  }, [messages.length, visibleMessageCount, skipReveal])
 
   useLayoutEffect(() => {
     scrollToBottom()
@@ -194,32 +201,34 @@ export default function DialogueBox({ node, messages, isLoading, sceneImageUrl, 
           )}
         </div>
 
-        {messages.length === 0 && node && (
-          <div style={styles.narrationBox}>
-            <div style={styles.narrationKicker}>旁白</div>
-            <p style={styles.narrationText}>正在进入场景...</p>
-          </div>
-        )}
-
-        {messages.slice(0, visibleMessageCount).map(msg => (
-          <MessageItem
-            key={msg.id}
-            msg={msg}
-            onNpcTypingChange={handleNpcTypingChange}
-            onNpcTypingTick={handleNpcTypingTick}
-          />
-        ))}
-
-        {isLoading && !hasVisibleStreamingMessage && !hasTypingNpcMessages && (
-          <div style={styles.loadingRow}>
-            <div style={styles.loadingDots}>
-              <span style={{...styles.dot, animationDelay: '0ms'}} />
-              <span style={{...styles.dot, animationDelay: '200ms'}} />
-              <span style={{...styles.dot, animationDelay: '400ms'}} />
+        <div style={styles.messageList}>
+          {messages.length === 0 && node && (
+            <div style={styles.narrationBox}>
+              <div style={styles.narrationKicker}>系统提示</div>
+              <p style={styles.narrationText}>正在接入校园模拟网络...</p>
             </div>
-          </div>
-        )}
-        <div ref={bottomRef} style={styles.bottomAnchor} />
+          )}
+
+          {messages.slice(0, visibleMessageCount).map(msg => (
+            <MessageItem
+              key={msg.id}
+              msg={msg}
+              onNpcTypingChange={handleNpcTypingChange}
+              onNpcTypingTick={handleNpcTypingTick}
+            />
+          ))}
+
+          {isLoading && !hasVisibleStreamingMessage && !hasTypingNpcMessages && (
+            <div style={styles.loadingRow}>
+              <div style={styles.loadingDots}>
+                <span style={{...styles.dot, animationDelay: '0ms'}} />
+                <span style={{...styles.dot, animationDelay: '200ms'}} />
+                <span style={{...styles.dot, animationDelay: '400ms'}} />
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} style={styles.bottomAnchor} />
+        </div>
       </div>
     </div>
   )
@@ -235,25 +244,17 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
   const isNpcTyping = msg.role === 'npc' && (msg.isStreaming || displayedNpcChars.length < npcFullChars.length)
 
   useEffect(() => {
-    if (msg.role !== 'npc') {
-      return
-    }
-
+    if (msg.role !== 'npc') return
     return () => onNpcTypingChange(msg.id, false)
   }, [msg.id, msg.role, onNpcTypingChange])
 
   useEffect(() => {
-    if (msg.role !== 'npc') {
-      return
-    }
-
+    if (msg.role !== 'npc') return
     onNpcTypingChange(msg.id, isNpcTyping)
   }, [isNpcTyping, msg.id, msg.role, onNpcTypingChange])
 
   useEffect(() => {
-    if (msg.role !== 'npc' || !displayedNpcContent) {
-      return
-    }
+    if (msg.role !== 'npc' || !displayedNpcContent) return
 
     if (!msg.content.startsWith(displayedNpcContent)) {
       setDisplayedNpcContent(msg.content)
@@ -262,9 +263,7 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
   }, [displayedNpcContent, msg.content, msg.role, onNpcTypingTick])
 
   useEffect(() => {
-    if (msg.role !== 'npc' || displayedNpcChars.length >= npcFullChars.length) {
-      return
-    }
+    if (msg.role !== 'npc' || displayedNpcChars.length >= npcFullChars.length) return
 
     const nextChar = npcFullChars[displayedNpcChars.length] ?? ''
     const step = getNpcTypewriterStep(npcFullChars.length, displayedNpcChars.length)
@@ -349,12 +348,14 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
 })
 
 function getInitialNpcDisplayedContent(msg: ConversationMessage): string {
+  // 如果不是 NPC 消息，或者正在流式生成中（属于新消息），初始显示为空，准备打字机
   if (msg.role !== 'npc' || msg.isStreaming) {
     return ''
   }
 
-  const messageAge = Date.now() - msg.timestamp
-  return messageAge > NPC_TYPEWRITER_RECENT_WINDOW_MS ? msg.content : ''
+  // 如果组件挂载时，消息已经不是 streaming 状态，说明它是历史消息
+  // 历史消息（如读档、跨越节点重绘等）应该直接显示完整内容，不要再打字
+  return msg.content
 }
 
 function getNpcTypewriterDelay(nextChar: string): number {
@@ -433,10 +434,11 @@ const styles: Record<string, React.CSSProperties> = {
   scrollArea: {
     flex: 1,
     overflowY: 'auto' as const,
-    padding: '16px 18px 22px',
+    padding: '24px 28px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '14px'
+    gap: '24px',
+    scrollbarWidth: 'none' as const
   },
   scenePanel: {
     width: '100%',
@@ -473,13 +475,16 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '780px'
   },
   narrationBox: {
-    background: 'linear-gradient(135deg, rgba(124,106,247,0.1), rgba(20,20,35,0.78))',
-    borderRadius: '16px',
-    padding: '16px 20px',
-    border: '1px solid rgba(124,106,247,0.3)',
-    maxWidth: '92%',
-    boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
-    animation: 'fadeIn 0.24s ease-out'
+    background: 'linear-gradient(135deg, rgba(124,106,247,0.08), rgba(13,13,26,0.85))',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderRadius: '20px',
+    padding: '20px 24px',
+    border: '1px solid rgba(124,106,247,0.25)',
+    maxWidth: '94%',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+    animation: 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+    margin: '10px 0'
   },
   narrationKicker: {
     color: '#93c5fd',
@@ -508,11 +513,12 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end'
   },
   playerBubble: {
-    background: 'linear-gradient(135deg, var(--color-primary-dim), var(--color-primary))',
-    borderRadius: '20px 20px 4px 20px',
-    padding: '12px 20px',
-    maxWidth: '70%',
-    boxShadow: '0 8px 24px rgba(124,106,247,0.3)'
+    background: 'linear-gradient(135deg, #7c6af7, #5a4ad1)',
+    borderRadius: '24px 24px 4px 24px',
+    padding: '14px 22px',
+    maxWidth: '75%',
+    boxShadow: '0 10px 30px rgba(124,106,247,0.25)',
+    border: '1px solid rgba(255,255,255,0.1)'
   },
   playerText: {
     fontSize: '15px',
@@ -547,13 +553,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500
   },
   npcBubbleText: {
-    background: 'rgba(35,35,60,0.85)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
-    borderRadius: '20px 20px 20px 4px',
-    padding: '14px 20px',
-    border: '1px solid rgba(124,106,247,0.4)',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+    background: 'rgba(20,20,35,0.82)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    borderRadius: '24px 24px 24px 4px',
+    padding: '16px 24px',
+    border: '1px solid rgba(124,106,247,0.35)',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+    position: 'relative'
   },
   npcBubbleStreaming: {
     border: '1px solid var(--color-accent)',
@@ -660,6 +667,51 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     background: '#7c6af7',
     animation: 'pulse 1.2s ease-in-out infinite'
+  },
+  stageArea: {
+    position: 'relative',
+    flex: '1', // 占据剩余空间
+    width: '100%',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  spriteWrapper: {
+    position: 'absolute',
+    bottom: '-20px', // 让立绘稍微下沉一点
+    left: '50%',
+    transform: 'translateX(-50%)',
+    height: '110%',
+    zIndex: 5,
+    pointerEvents: 'none'
+  },
+  spriteImage: {
+    height: '100%',
+    width: 'auto',
+    objectFit: 'contain',
+    animation: 'spriteEntry 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+    filter: 'drop-shadow(0 10px 40px rgba(0,0,0,0.8))',
+    mixBlendMode: 'multiply' as any,
+    transformOrigin: 'bottom center'
+  },
+  messageZone: {
+    height: '45%', // 固定对话区高度
+    width: '100%',
+    background: 'linear-gradient(to bottom, rgba(13,13,26,0.3) 0%, rgba(13,13,26,0.9) 20%, rgba(13,13,26,0.95) 100%)',
+    borderTop: '1px solid rgba(255,255,255,0.1)',
+    position: 'relative',
+    zIndex: 10
+  },
+  scrollArea: {
+    height: '100%',
+    overflowY: 'auto' as const,
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '20px',
+    scrollbarWidth: 'none' as const
   },
   bottomAnchor: {
     width: '100%',
