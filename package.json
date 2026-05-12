@@ -49,6 +49,18 @@
         }
       ]
     },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.education"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true

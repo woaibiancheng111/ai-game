@@ -89,6 +89,30 @@ export function getAchievements(state: GameState, saveSlots: SaveSlotMeta[] = []
       unlockHint: '到达任一第八章人生结局。',
       category: '毕业',
       unlocked: state.currentActId === 'act8' && Boolean(state.endingId?.includes('_')) && [...visited].some(node => node.startsWith('ending_'))
+    },
+    {
+      id: 'midnight_companion',
+      title: '深夜陪伴',
+      description: '在大志最脆弱的深夜，没有假装没听见，而是选择了陪伴。',
+      unlockHint: '在大志深夜打电话的场景中选择陪伴他。',
+      category: '羁绊',
+      unlocked: Boolean(flags.dazhiOpenedUp)
+    },
+    {
+      id: 'silent_trust',
+      title: '沉默者的信任',
+      description: '让小杰说出了他从未告诉别人的过去。不是因为追问，而是因为你给了他安全感。',
+      unlockHint: '在小杰讨论手册时，温柔地让他说出心事。',
+      category: '羁绊',
+      unlocked: Boolean(flags.xiaojieRevealedPast)
+    },
+    {
+      id: 'beyond_study',
+      title: '不止学习',
+      description: '与林雨薇之间，建立了超越学业指导的真实联结。',
+      unlockHint: '在湖边与学姐建立深层情感连接。',
+      category: '羁绊',
+      unlocked: Boolean(flags.deepBondWithXuejie || flags.deepEmotionalBond)
     }
   ]
 

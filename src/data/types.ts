@@ -174,7 +174,7 @@ export interface AchievementItem {
   title: string
   description: string
   unlockHint: string
-  category: '适应' | '反诈' | '求助' | '成长' | '毕业'
+  category: '适应' | '反诈' | '求助' | '成长' | '毕业' | '羁绊'
   unlocked: boolean
   synced?: boolean
 }

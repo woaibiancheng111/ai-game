@@ -1,0 +1,26 @@
+{
+  "name": "AI 校园生存模拟器",
+  "short_name": "校园模拟器",
+  "description": "一款融合反诈教育与深度叙事的校园生存视觉小说",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b0b18",
+  "theme_color": "#7c6af7",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "games"],
+  "lang": "zh-CN"
+}

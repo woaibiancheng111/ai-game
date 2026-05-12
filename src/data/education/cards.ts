@@ -192,6 +192,30 @@ const EDUCATION_CARDS: Record<string, EducationCard> = {
     body: '毕业季的签约、租房、档案、离校手续和培训机会都可能被包装成“内部渠道”。越临近截止，越要回到官方入口核验。',
     checklist: ['通过学校官网确认手续入口', '不把证件和费用交给陌生代办', '签约、租房和培训付款前保留合同并找可信渠道核对'],
     campusAction: '学校可在毕业季提供官方手续清单和风险提醒，把安全教育延伸到离校阶段。'
+  },
+  roommate_relationship: {
+    id: 'roommate_relationship',
+    title: '室友关系也需要维护',
+    category: '宿舍生活',
+    body: '大学中后期，室友自然走向不同方向。渐行渐远不是谁的错，但关系维护需要主动行动，而不是等沉默变成遗憾。',
+    checklist: ['偶尔主动约一次饭或活动', '尊重彼此节奏差异', '想念的时候就说出来，不要等到毕业'],
+    campusAction: '学校可在高年级学生活动中加入室友关系维护和心理调适内容。'
+  },
+  perfectionism_trap: {
+    id: 'perfectionism_trap',
+    title: '完美主义也是压力源',
+    category: '心理支持',
+    body: '永远整齐的笔记和从不迟交的作业，背后可能不是热爱，而是对失控的恐惧。允许自己不完美，是心理健康的重要一步。',
+    checklist: ['区分高标准和自我惩罚', '允许自己在某些事上做到"够好"', '崩溃后不要假装没事，找人聊聊'],
+    campusAction: '心理中心可针对高绩点学生开展完美主义识别和调适工作坊。'
+  },
+  imposter_feelings: {
+    id: 'imposter_feelings',
+    title: '冒名顶替感不是真相',
+    category: '心理支持',
+    body: '觉得自己不配、迟早会被发现"其实不行"，这种感受有个名字叫冒名顶替综合征。它不是事实判断，而是对自己过于严格的副产品。',
+    checklist: ['记录自己真实完成的事', '把"我不够好"改成"我还在学"', '和信任的人聊聊这种感受'],
+    campusAction: '学校可在高年级心理健康教育中专门讲解冒名顶替感的识别和应对。'
   }
 }
 
@@ -219,11 +243,11 @@ const NODE_CARD_MAP: Record<string, string> = {
   act5_family_call: 'family_pressure_support',
   act5_manual_review: 'handbook_transfer',
   act6_sophomore_crossroads: 'long_term_direction',
-  act6_roommate_drift: 'family_pressure_support',
-  act6_xiaoming_breakdown: 'help_is_strength',
+  act6_roommate_drift: 'roommate_relationship',
+  act6_xiaoming_breakdown: 'perfectionism_trap',
   act6_midterm_feedback: 'feedback_iteration',
   act7_family_expectation: 'expectation_management',
-  act7_imposter_syndrome: 'help_is_strength',
+  act7_imposter_syndrome: 'imposter_feelings',
   act7_quiet_connection: 'sustainable_choice',
   act7_internship_offer: 'opportunity_verification',
   act7_value_conflict: 'sustainable_choice',

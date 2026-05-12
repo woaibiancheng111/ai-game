@@ -18,8 +18,15 @@ import { getMessagesRevealDelay } from './utils/revealTiming'
 import { getUnlockedAchievementIds } from '../engine/achievements'
 
 const getBackgroundImage = (location: string) => {
-  if (location?.includes('宿舍')) return 'url(/backgrounds/dorm.png)';
-  if (location?.includes('教室') || location?.includes('上课')) return 'url(/backgrounds/classroom.png)';
+  if (!location) return 'linear-gradient(135deg, #0b0b18 0%, #1a1040 100%)';
+  if (location.includes('宿舍')) return 'url(/backgrounds/dorm.png)';
+  if (location.includes('教室') || location.includes('上课') || location.includes('会议室')) return 'url(/backgrounds/classroom.png)';
+  if (location.includes('图书馆')) return 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
+  if (location.includes('湖') || location.includes('操场')) return 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)';
+  if (location.includes('食堂')) return 'linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%)';
+  if (location.includes('走廊') || location.includes('台阶') || location.includes('公告栏') || location.includes('大厅')) return 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)';
+  if (location.includes('洗手间')) return 'linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 100%)';
+  if (location.includes('毕业') || location.includes('典礼') || location.includes('林荫')) return 'linear-gradient(135deg, #141e30 0%, #243b55 100%)';
   return 'url(/backgrounds/campus_gate.png)';
 };
 
@@ -759,7 +766,7 @@ export default function App() {
   const bgImage = gameState.currentSceneImageUrl ? `url(${gameState.currentSceneImageUrl})` : getBackgroundImage(gameState.currentLocation || '');
 
   return (
-    <div style={{ ...styles.container, background: `${bgImage} center/cover` }}>
+    <div className="scene-bg-transition" style={{ ...styles.container, background: `${bgImage} center/cover` }}>
       <div style={styles.backgroundOverlay} />
       <button
         type="button"
@@ -782,7 +789,7 @@ export default function App() {
         open={statusPanelOpen}
         onClose={() => setStatusPanelOpen(false)}
       />
-      <div style={styles.mainArea}>
+      <div key={currentNode?.id ?? 'empty'} className="scene-fade-enter" style={styles.mainArea}>
         <DialogueBox
           node={currentNode}
           messages={messages}
