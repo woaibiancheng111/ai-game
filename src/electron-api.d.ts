@@ -21,11 +21,32 @@ interface LLMChatStreamEndEvent {
 interface LLMChatStreamErrorEvent {
   requestId: string
   error: string
+  errorCode?: string
 }
 
 interface ImageGenPayload {
   prompt: string
   model?: string
+}
+
+interface AIProxyChatPayload {
+  messages: Array<{ role: string; content: string }>
+  context?: unknown
+  model?: string
+  temperature?: number
+  max_tokens?: number
+  proxyUrl?: string
+}
+
+interface AIProxyChatStreamPayload extends AIProxyChatPayload {
+  requestId: string
+}
+
+interface AIProxyChatResult {
+  ok: boolean
+  text: string
+  errorCode?: string
+  message?: string
 }
 
 interface PlayerProfilePayload {
@@ -67,6 +88,37 @@ interface DbHealthPayload {
   message: string
 }
 
+interface AppSettingsPayload {
+  aiEnabled: boolean
+  aiAllowStreaming: boolean
+  aiProxyUrl: string
+  bgmEnabled: boolean
+  sfxEnabled: boolean
+  masterVolume: number
+  errorLoggingEnabled: boolean
+}
+
+interface AppLogPayload {
+  level: 'info' | 'warning' | 'error'
+  scope: string
+  message: string
+  details?: unknown
+}
+
+interface AppReleaseInfoPayload {
+  appName: string
+  version: string
+  platform: string
+  userDataPath: string
+  logsPath: string
+}
+
+interface AppPathActionResultPayload {
+  ok: boolean
+  path?: string
+  message?: string
+}
+
 interface ElectronAPI {
   llm: {
     chat: (payload: LLMChatPayload) => Promise<string>
@@ -75,6 +127,13 @@ interface ElectronAPI {
     onChatStreamEnd: (callback: (payload: LLMChatStreamEndEvent) => void) => () => void
     onChatStreamError: (callback: (payload: LLMChatStreamErrorEvent) => void) => () => void
     generateImage: (payload: ImageGenPayload) => Promise<string>
+  }
+  aiProxy: {
+    chat: (payload: AIProxyChatPayload) => Promise<AIProxyChatResult>
+    chatStream: (payload: AIProxyChatStreamPayload) => Promise<boolean>
+    onChatStreamChunk: (callback: (payload: LLMChatStreamChunkEvent) => void) => () => void
+    onChatStreamEnd: (callback: (payload: LLMChatStreamEndEvent) => void) => () => void
+    onChatStreamError: (callback: (payload: LLMChatStreamErrorEvent) => void) => () => void
   }
   storage: {
     get: (key: string) => Promise<unknown>
@@ -112,6 +171,17 @@ interface ElectronAPI {
   config: {
     setApiKey: (apiKey: string) => Promise<unknown>
     getApiKey: () => Promise<string | null>
+  }
+  settings: {
+    get: () => Promise<unknown>
+    set: (settings: AppSettingsPayload) => Promise<AppSettingsPayload>
+  }
+  app: {
+    getReleaseInfo: () => Promise<AppReleaseInfoPayload>
+    log: (payload: AppLogPayload) => Promise<boolean>
+    openUserDataPath: () => Promise<AppPathActionResultPayload>
+    openLogsPath: () => Promise<AppPathActionResultPayload>
+    exportLogs: () => Promise<AppPathActionResultPayload>
   }
 }
 

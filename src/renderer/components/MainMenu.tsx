@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import type { AuthSession, ChapterMeta, DbHealth, GameState, SaveSlotMeta } from '../../data/types'
+import type { AppReleaseInfo, AppSettings, AuthSession, ChapterMeta, DbHealth, GameState, SaveSlotMeta } from '../../data/types'
 import { DEFAULT_SCHOOL_CONFIG } from '../../data/school/defaultConfig'
 import { getAchievements } from '../../engine/achievements'
+import { DEFAULT_APP_SETTINGS } from '../../services/settings'
 
 type MenuTab = 'start' | 'saves' | 'achievements' | 'settings'
 
@@ -12,7 +13,8 @@ interface MainMenuProps {
   unlockedActIds: string[]
   hasAutosave?: boolean
   saveSlots?: SaveSlotMeta[]
-  initialApiKey?: string
+  settings: AppSettings
+  releaseInfo?: AppReleaseInfo | null
   authSession?: AuthSession | null
   dbHealth?: DbHealth | null
   syncedAchievementIds?: string[]
@@ -21,7 +23,8 @@ interface MainMenuProps {
   onLoadAutosave?: () => void
   onLoadSave?: (slotId: string) => void
   onSaveManual?: () => void
-  onUpdateApiKey?: (apiKey: string) => void
+  onUpdateSettings?: (settings: AppSettings) => void
+  onShowNotice?: (notice: { type: 'success' | 'warning' | 'error' | 'info'; title: string; message: string }) => void
   onRefreshDbHealth?: () => void
   onLogout?: () => void
 }
@@ -33,7 +36,8 @@ export default function MainMenu({
   unlockedActIds,
   hasAutosave = false,
   saveSlots = [],
-  initialApiKey = '',
+  settings,
+  releaseInfo,
   authSession,
   dbHealth,
   syncedAchievementIds = [],
@@ -42,7 +46,8 @@ export default function MainMenu({
   onLoadAutosave,
   onLoadSave,
   onSaveManual,
-  onUpdateApiKey,
+  onUpdateSettings,
+  onShowNotice,
   onRefreshDbHealth,
   onLogout
 }: MainMenuProps) {
@@ -50,7 +55,8 @@ export default function MainMenu({
   const [activeTab, setActiveTab] = useState<MenuTab>('start')
   const [isRenaming, setIsRenaming] = useState(false)
   const [draftName, setDraftName] = useState(playerName)
-  const [draftApiKey, setDraftApiKey] = useState(initialApiKey)
+  const [draftSettings, setDraftSettings] = useState(settings)
+  const [aiProxyTesting, setAiProxyTesting] = useState(false)
   const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 920 : false)
 
   useEffect(() => {
@@ -69,16 +75,63 @@ export default function MainMenu({
   }, [playerName])
 
   useEffect(() => {
-    setDraftApiKey(initialApiKey)
-  }, [initialApiKey])
+    setDraftSettings(settings)
+  }, [settings])
 
   const achievements = useMemo(() => getAchievements(gameState, saveSlots, syncedAchievementIds), [gameState, saveSlots, syncedAchievementIds])
   const unlockedCount = achievements.filter(item => item.unlocked).length
   const latestChapter = [...chapters].reverse().find(chapter => unlockedActIds.includes(chapter.actId)) ?? chapters[0]
   const newestSave = [...saveSlots].sort((a, b) => b.savedAt - a.savedAt)[0]
 
+  const handleTestAIProxy = async () => {
+    setAiProxyTesting(true)
+    try {
+      const result = await window.electronAPI.aiProxy.chat({
+        proxyUrl: draftSettings.aiProxyUrl,
+        model: 'qwen-plus',
+        temperature: 0.2,
+        max_tokens: 80,
+        context: {
+          source: 'settings-health-check',
+          appVersion: releaseInfo?.version
+        },
+        messages: [
+          { role: 'system', content: '你是 AI 校园生存模拟器的代理健康检查。请只返回一句简短中文。' },
+          { role: 'user', content: '请回复：代理连接正常。' }
+        ]
+      })
+
+      onShowNotice?.({
+        type: result.ok ? 'success' : 'warning',
+        title: result.ok ? 'AI 代理可用' : 'AI 代理不可用',
+        message: result.ok ? result.text.slice(0, 80) || '代理连接正常。' : result.message ?? result.errorCode ?? '代理测试失败'
+      })
+    } catch (err) {
+      onShowNotice?.({
+        type: 'error',
+        title: 'AI 代理测试异常',
+        message: err instanceof Error ? err.message : '代理测试失败'
+      })
+    } finally {
+      setAiProxyTesting(false)
+    }
+  }
+
+  const handlePathAction = async (
+    action: () => Promise<{ ok: boolean; path?: string; message?: string }>,
+    successTitle: string,
+    failureTitle: string
+  ) => {
+    const result = await action()
+    onShowNotice?.({
+      type: result.ok ? 'success' : 'warning',
+      title: result.ok ? successTitle : failureTitle,
+      message: result.ok ? result.path ?? '操作完成。' : result.message ?? result.path ?? '操作失败。'
+    })
+  }
+
   return (
-    <div style={{ ...styles.container, opacity: visible ? 1 : 0 }}>
+    <div style={{ ...styles.container, opacity: visible ? 1 : 0 }} data-testid="main-menu">
       <div style={styles.backdrop} />
       <div style={styles.skyGlow} />
       <div style={{ ...styles.shell, ...(isCompact ? styles.shellCompact : {}) }}>
@@ -144,9 +197,9 @@ export default function MainMenu({
                 </div>
                 <div style={styles.heroActions}>
                   {hasAutosave && onLoadAutosave && (
-                    <button type="button" onClick={onLoadAutosave} style={styles.primaryButton}>继续游戏</button>
+                    <button type="button" onClick={onLoadAutosave} style={styles.primaryButton} data-testid="continue-game-button">继续游戏</button>
                   )}
-                  <button type="button" onClick={() => onStartChapter('act1')} style={styles.secondaryButton}>新的开始</button>
+                  <button type="button" onClick={() => onStartChapter('act1')} style={styles.secondaryButton} data-testid="new-game-button">新的开始</button>
                 </div>
               </div>
 
@@ -159,7 +212,7 @@ export default function MainMenu({
               <div style={{ ...styles.quickGrid, ...(isCompact ? styles.quickGridCompact : {}) }}>
                 <QuickAction title="存档" text={newestSave ? `${newestSave.currentLocation} · 第 ${newestSave.week} 周` : '查看自动存档和手动存档'} onClick={() => setActiveTab('saves')} />
                 <QuickAction title="成就" text="查看大学路线里解锁过的成长标记" onClick={() => setActiveTab('achievements')} />
-                <QuickAction title="设置" text="配置模型 API Key 和当前玩家档案" onClick={() => setActiveTab('settings')} />
+                <QuickAction title="设置" text="配置 AI 代理、音量、日志和当前玩家档案" onClick={() => setActiveTab('settings')} />
               </div>
 
               <div style={styles.sectionHeader}>
@@ -208,12 +261,12 @@ export default function MainMenu({
                   <div style={styles.panelKicker}>Saves</div>
                   <h2 style={styles.panelTitle}>存档</h2>
                 </div>
-                <button type="button" onClick={onSaveManual} style={styles.secondaryButton}>保存当前进度</button>
+                <button type="button" onClick={onSaveManual} style={styles.secondaryButton} data-testid="manual-save-button">保存当前进度</button>
               </div>
 
               <div style={styles.saveStack}>
                 {hasAutosave && onLoadAutosave && (
-                  <button type="button" onClick={onLoadAutosave} style={styles.saveCard}>
+                  <button type="button" onClick={onLoadAutosave} style={styles.saveCard} data-testid="autosave-load-button">
                     <span style={styles.saveTitle}>自动存档</span>
                     <span style={styles.saveMeta}>继续最近一次游戏进度</span>
                   </button>
@@ -224,7 +277,7 @@ export default function MainMenu({
                 )}
 
                 {saveSlots.map(save => (
-                  <button key={save.slotId} type="button" onClick={() => onLoadSave?.(save.slotId)} style={styles.saveCard}>
+                  <button key={save.slotId} type="button" onClick={() => onLoadSave?.(save.slotId)} style={styles.saveCard} data-testid={`save-slot-${save.slotId}`}>
                     <span style={styles.saveTitle}>{save.label}</span>
                     <span style={styles.saveMeta}>{save.currentLocation} · 第 {save.week} 周 · {new Date(save.savedAt).toLocaleString()}</span>
                   </button>
@@ -279,15 +332,104 @@ export default function MainMenu({
                   </div>
                 </div>
 
-                <label style={styles.settingLabel}>通义千问 / DashScope API Key</label>
-                <input
-                  type="password"
-                  value={draftApiKey}
-                  onChange={event => setDraftApiKey(event.target.value)}
-                  placeholder="sk-xxxxxxxxxxxxxxxx"
-                  style={styles.settingInput}
-                />
-                <button type="button" onClick={() => onUpdateApiKey?.(draftApiKey.trim())} style={styles.primaryButton}>保存设置</button>
+                <div style={styles.settingGroup}>
+                  <div style={styles.settingLabel}>AI 商业代理</div>
+                  <div style={styles.settingHint}>代理未配置时仍可完整游玩，NPC 会自动使用静态台词兜底。</div>
+                  <label style={styles.switchRow}>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.aiEnabled}
+                      onChange={event => setDraftSettings(prev => ({ ...prev, aiEnabled: event.target.checked }))}
+                    />
+                    <span>启用 AI 对话增强</span>
+                  </label>
+                  <label style={styles.switchRow}>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.aiAllowStreaming}
+                      onChange={event => setDraftSettings(prev => ({ ...prev, aiAllowStreaming: event.target.checked }))}
+                    />
+                    <span>优先使用流式输出</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={draftSettings.aiProxyUrl}
+                    onChange={event => setDraftSettings(prev => ({ ...prev, aiProxyUrl: event.target.value }))}
+                    placeholder="https://your-ai-proxy.example.com/chat"
+                    style={styles.settingInput}
+                  />
+                  <div style={styles.settingActions}>
+                    <button type="button" onClick={handleTestAIProxy} disabled={aiProxyTesting} style={styles.smallGhostButton}>
+                      {aiProxyTesting ? '测试中...' : '测试 AI 代理'}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={styles.settingGroup}>
+                  <div style={styles.settingLabel}>音频与流畅度</div>
+                  <label style={styles.switchRow}>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.bgmEnabled}
+                      onChange={event => setDraftSettings(prev => ({ ...prev, bgmEnabled: event.target.checked }))}
+                    />
+                    <span>启用背景音景</span>
+                  </label>
+                  <label style={styles.switchRow}>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.sfxEnabled}
+                      onChange={event => setDraftSettings(prev => ({ ...prev, sfxEnabled: event.target.checked }))}
+                    />
+                    <span>启用按钮音效</span>
+                  </label>
+                  <label style={styles.settingLabel}>主音量 {Math.round(draftSettings.masterVolume * 100)}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={draftSettings.masterVolume}
+                    onChange={event => setDraftSettings(prev => ({ ...prev, masterVolume: Number(event.target.value) }))}
+                    style={styles.rangeInput}
+                  />
+                  <label style={styles.switchRow}>
+                    <input
+                      type="checkbox"
+                      checked={draftSettings.errorLoggingEnabled}
+                      onChange={event => setDraftSettings(prev => ({ ...prev, errorLoggingEnabled: event.target.checked }))}
+                    />
+                    <span>记录错误日志，方便排查安装包问题</span>
+                  </label>
+                </div>
+
+                <div style={styles.settingActions}>
+                  <button type="button" onClick={() => onUpdateSettings?.(draftSettings)} style={styles.primaryButton} data-testid="save-settings-button">保存设置</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftSettings(DEFAULT_APP_SETTINGS)
+                      onUpdateSettings?.(DEFAULT_APP_SETTINGS)
+                    }}
+                    style={styles.secondaryButton}
+                  >
+                    恢复默认设置
+                  </button>
+                </div>
+
+                {releaseInfo && (
+                  <div style={styles.releaseBox}>
+                    <div style={styles.settingLabel}>发布信息</div>
+                    <div style={styles.releaseLine}>版本：{releaseInfo.version}</div>
+                    <div style={styles.releaseLine}>数据目录：{releaseInfo.userDataPath}</div>
+                    <div style={styles.releaseLine}>日志目录：{releaseInfo.logsPath}</div>
+                    <div style={styles.settingActions}>
+                      <button type="button" onClick={() => handlePathAction(window.electronAPI.app.openUserDataPath, '已打开数据目录', '打开数据目录失败')} style={styles.smallGhostButton}>打开数据目录</button>
+                      <button type="button" onClick={() => handlePathAction(window.electronAPI.app.openLogsPath, '已打开日志目录', '打开日志目录失败')} style={styles.smallGhostButton}>打开日志目录</button>
+                      <button type="button" onClick={() => handlePathAction(window.electronAPI.app.exportLogs, '日志已导出', '日志导出失败')} style={styles.smallGhostButton}>导出日志包</button>
+                    </div>
+                  </div>
+                )}
 
                 <div style={styles.schoolBox}>
                   <div style={styles.settingLabel}>学校信息</div>
@@ -309,8 +451,9 @@ export default function MainMenu({
 }
 
 function MenuButton({ active, label, subLabel, onClick }: { active: boolean; label: string; subLabel: string; onClick: () => void }) {
+  const testId = `menu-tab-${label}`
   return (
-    <button type="button" onClick={onClick} style={{ ...styles.navButton, ...(active ? styles.navButtonActive : {}) }}>
+    <button type="button" onClick={onClick} style={{ ...styles.navButton, ...(active ? styles.navButtonActive : {}) }} data-testid={testId}>
       <span style={styles.navLabel}>{label}</span>
       <span style={styles.navSubLabel}>{subLabel}</span>
     </button>
@@ -860,6 +1003,38 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #334155',
     color: '#e5e7eb',
     fontSize: '14px'
+  },
+  settingHint: {
+    color: '#94a3b8',
+    fontSize: '12px',
+    lineHeight: 1.6
+  },
+  switchRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '9px',
+    color: '#cbd5e1',
+    fontSize: '13px',
+    lineHeight: 1.4
+  },
+  rangeInput: {
+    width: '100%',
+    accentColor: '#14b8a6'
+  },
+  releaseBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '12px',
+    borderRadius: '8px',
+    background: 'rgba(15,23,42,0.5)',
+    border: '1px solid rgba(148,163,184,0.12)'
+  },
+  releaseLine: {
+    color: '#94a3b8',
+    fontSize: '11px',
+    lineHeight: 1.5,
+    overflowWrap: 'anywhere'
   },
   schoolBox: {
     display: 'flex',

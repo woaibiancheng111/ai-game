@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import path from 'path'
+import fs from 'fs/promises'
 import bcrypt from 'bcryptjs'
 import type Store from 'electron-store'
 import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise'
@@ -13,6 +14,26 @@ interface LLMChatPayload {
 
 interface LLMChatStreamPayload extends LLMChatPayload {
   requestId: string
+}
+
+interface AIProxyChatPayload {
+  messages: Array<{ role: string; content: string }>
+  context?: unknown
+  model?: string
+  temperature?: number
+  max_tokens?: number
+  proxyUrl?: string
+}
+
+interface AIProxyChatStreamPayload extends AIProxyChatPayload {
+  requestId: string
+}
+
+interface AIProxyChatResult {
+  ok: boolean
+  text: string
+  errorCode?: string
+  message?: string
 }
 
 interface PlayerProfileRecord {
@@ -54,6 +75,29 @@ interface DbHealthRecord {
   message: string
 }
 
+interface AppSettingsRecord {
+  aiEnabled: boolean
+  aiAllowStreaming: boolean
+  aiProxyUrl: string
+  bgmEnabled: boolean
+  sfxEnabled: boolean
+  masterVolume: number
+  errorLoggingEnabled: boolean
+}
+
+interface AppLogPayload {
+  level: 'info' | 'warning' | 'error'
+  scope: string
+  message: string
+  details?: unknown
+}
+
+interface AppPathActionResult {
+  ok: boolean
+  path?: string
+  message?: string
+}
+
 type AppStore = Store<Record<string, unknown>>
 
 const LOCAL_PROFILES_KEY = 'db:profiles'
@@ -62,6 +106,20 @@ const CURRENT_PROFILE_KEY = 'db:currentProfileId'
 const CURRENT_SESSION_KEY = 'db:currentSession'
 const LOCAL_PROGRESS_KEY = 'db:progress'
 const LOCAL_ACHIEVEMENTS_KEY = 'db:achievements'
+const APP_SETTINGS_KEY = 'settings:app'
+const DEFAULT_APP_SETTINGS: AppSettingsRecord = {
+  aiEnabled: true,
+  aiAllowStreaming: true,
+  aiProxyUrl: '',
+  bgmEnabled: true,
+  sfxEnabled: true,
+  masterVolume: 0.5,
+  errorLoggingEnabled: true
+}
+
+if (process.env.AI_GAME_USER_DATA_DIR?.trim()) {
+  app.setPath('userData', path.resolve(process.env.AI_GAME_USER_DATA_DIR.trim()))
+}
 
 let storePromise: Promise<AppStore> | null = null
 let poolPromise: Promise<Pool | null> | null = null
@@ -86,7 +144,55 @@ function getDbConfig() {
   }
 }
 
+function normalizeAppSettings(value: unknown): AppSettingsRecord {
+  if (typeof value !== 'object' || value === null) {
+    return { ...DEFAULT_APP_SETTINGS }
+  }
+
+  const maybeSettings = value as Partial<AppSettingsRecord>
+  return {
+    aiEnabled: typeof maybeSettings.aiEnabled === 'boolean' ? maybeSettings.aiEnabled : DEFAULT_APP_SETTINGS.aiEnabled,
+    aiAllowStreaming: typeof maybeSettings.aiAllowStreaming === 'boolean' ? maybeSettings.aiAllowStreaming : DEFAULT_APP_SETTINGS.aiAllowStreaming,
+    aiProxyUrl: typeof maybeSettings.aiProxyUrl === 'string' ? maybeSettings.aiProxyUrl.trim() : DEFAULT_APP_SETTINGS.aiProxyUrl,
+    bgmEnabled: typeof maybeSettings.bgmEnabled === 'boolean' ? maybeSettings.bgmEnabled : DEFAULT_APP_SETTINGS.bgmEnabled,
+    sfxEnabled: typeof maybeSettings.sfxEnabled === 'boolean' ? maybeSettings.sfxEnabled : DEFAULT_APP_SETTINGS.sfxEnabled,
+    masterVolume: typeof maybeSettings.masterVolume === 'number' && Number.isFinite(maybeSettings.masterVolume)
+      ? Math.max(0, Math.min(1, maybeSettings.masterVolume))
+      : DEFAULT_APP_SETTINGS.masterVolume,
+    errorLoggingEnabled: typeof maybeSettings.errorLoggingEnabled === 'boolean'
+      ? maybeSettings.errorLoggingEnabled
+      : DEFAULT_APP_SETTINGS.errorLoggingEnabled
+  }
+}
+
+async function readAppSettings(): Promise<AppSettingsRecord> {
+  const store = await getStore()
+  return normalizeAppSettings(store.get(APP_SETTINGS_KEY))
+}
+
+async function writeAppLog(payload: AppLogPayload): Promise<boolean> {
+  const settings = await readAppSettings()
+  if (!settings.errorLoggingEnabled) {
+    return false
+  }
+
+  const logsPath = path.join(app.getPath('userData'), 'logs')
+  await fs.mkdir(logsPath, { recursive: true })
+  const line = JSON.stringify({
+    time: new Date().toISOString(),
+    ...payload
+  })
+  await fs.appendFile(path.join(logsPath, 'app.log'), `${line}\n`, 'utf8')
+  return true
+}
+
 async function getPool(): Promise<Pool | null> {
+  if (process.env.AI_GAME_DISABLE_MYSQL === '1') {
+    dbReady = false
+    dbUnavailableReason = 'MySQL disabled by AI_GAME_DISABLE_MYSQL'
+    return null
+  }
+
   if (poolPromise) {
     const currentPool = await poolPromise
     if (currentPool && dbReady) {
@@ -273,6 +379,105 @@ function extractStreamChunk(data: unknown): string {
   }
 
   return ''
+}
+
+function extractChatContent(data: unknown): string {
+  if (typeof data === 'string') {
+    return data
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    return ''
+  }
+
+  const maybeData = data as {
+    text?: unknown
+    content?: unknown
+    choices?: Array<{ message?: { content?: unknown }; delta?: { content?: unknown } }>
+  }
+
+  if (typeof maybeData.text === 'string') {
+    return maybeData.text
+  }
+
+  if (typeof maybeData.content === 'string') {
+    return maybeData.content
+  }
+
+  const first = maybeData.choices?.[0]
+  if (typeof first?.message?.content === 'string') {
+    return first.message.content
+  }
+
+  if (typeof first?.delta?.content === 'string') {
+    return first.delta.content
+  }
+
+  return ''
+}
+
+function getProxyUrl(payloadUrl?: string): string {
+  if (payloadUrl?.trim()) {
+    return payloadUrl.trim()
+  }
+
+  if (process.env.AI_PROXY_URL?.trim()) {
+    return process.env.AI_PROXY_URL.trim()
+  }
+
+  return ''
+}
+
+function buildProxyBody(payload: AIProxyChatPayload, stream = false) {
+  return {
+    model: payload.model || 'qwen-plus',
+    messages: payload.messages,
+    context: payload.context,
+    temperature: payload.temperature ?? 0.7,
+    max_tokens: payload.max_tokens ?? 2000,
+    stream
+  }
+}
+
+async function callAIProxy(payload: AIProxyChatPayload): Promise<AIProxyChatResult> {
+  const proxyUrl = getProxyUrl(payload.proxyUrl)
+  if (!proxyUrl) {
+    return { ok: false, text: '', errorCode: 'proxy_not_configured', message: 'AI 代理地址未配置' }
+  }
+
+  try {
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildProxyBody(payload))
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        ok: false,
+        text: '',
+        errorCode: `proxy_http_${response.status}`,
+        message: errorText || `AI 代理请求失败: ${response.status}`
+      }
+    }
+
+    const contentType = response.headers.get('content-type') ?? ''
+    const data = contentType.includes('application/json') ? await response.json() : await response.text()
+    const text = extractChatContent(data).trim()
+    return text
+      ? { ok: true, text }
+      : { ok: false, text: '', errorCode: 'proxy_empty_response', message: 'AI 代理响应为空' }
+  } catch (err) {
+    return {
+      ok: false,
+      text: '',
+      errorCode: 'proxy_exception',
+      message: err instanceof Error ? err.message : 'AI 代理请求异常'
+    }
+  }
 }
 
 function createId(prefix: string): string {
@@ -659,6 +864,135 @@ ipcMain.handle('llm:generateImage', async (_event, payload: { prompt: string; mo
   return data.output?.image_url || ''
 })
 
+ipcMain.handle('aiProxy:chat', async (_event, payload: AIProxyChatPayload): Promise<AIProxyChatResult> => {
+  const result = await callAIProxy(payload)
+  if (!result.ok) {
+    await writeAppLog({
+      level: 'warning',
+      scope: 'aiProxy:chat',
+      message: result.message ?? 'AI 代理请求失败',
+      details: { errorCode: result.errorCode }
+    }).catch(() => false)
+  }
+  return result
+})
+
+ipcMain.handle('aiProxy:chat:stream', async (event, payload: AIProxyChatStreamPayload) => {
+  const proxyUrl = getProxyUrl(payload.proxyUrl)
+  if (!proxyUrl) {
+    sendStreamEvent(event, 'aiProxy:chat:stream-error', {
+      requestId: payload.requestId,
+      error: 'AI 代理地址未配置',
+      errorCode: 'proxy_not_configured'
+    })
+    return false
+  }
+
+  try {
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildProxyBody(payload, true))
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      sendStreamEvent(event, 'aiProxy:chat:stream-error', {
+        requestId: payload.requestId,
+        error: errorText || `AI 代理请求失败: ${response.status}`,
+        errorCode: `proxy_http_${response.status}`
+      })
+      return false
+    }
+
+    if (!response.body) {
+      sendStreamEvent(event, 'aiProxy:chat:stream-error', {
+        requestId: payload.requestId,
+        error: 'AI 代理流式响应为空',
+        errorCode: 'proxy_empty_body'
+      })
+      return false
+    }
+
+    const contentType = response.headers.get('content-type') ?? ''
+    if (!contentType.includes('text/event-stream')) {
+      const data = contentType.includes('application/json') ? await response.json() : await response.text()
+      const text = extractChatContent(data)
+      if (text) {
+        sendStreamEvent(event, 'aiProxy:chat:stream-chunk', { requestId: payload.requestId, chunk: text })
+      }
+      sendStreamEvent(event, 'aiProxy:chat:stream-end', { requestId: payload.requestId })
+      return true
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const processLines = (flush: boolean) => {
+      const lines = buffer.split('\n')
+      if (!flush) {
+        buffer = lines.pop() ?? ''
+      } else {
+        buffer = ''
+      }
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim()
+        if (!line.startsWith('data:')) {
+          continue
+        }
+
+        const dataLine = line.slice(5).trim()
+        if (!dataLine || dataLine === '[DONE]') {
+          continue
+        }
+
+        try {
+          const parsed = JSON.parse(dataLine)
+          const chunk = extractStreamChunk(parsed) || extractChatContent(parsed)
+          if (chunk) {
+            sendStreamEvent(event, 'aiProxy:chat:stream-chunk', { requestId: payload.requestId, chunk })
+          }
+        } catch {
+          sendStreamEvent(event, 'aiProxy:chat:stream-chunk', { requestId: payload.requestId, chunk: dataLine })
+        }
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      processLines(false)
+    }
+
+    buffer += decoder.decode()
+    processLines(true)
+    sendStreamEvent(event, 'aiProxy:chat:stream-end', { requestId: payload.requestId })
+    return true
+  } catch (err) {
+    const error = err instanceof Error ? err.message : 'AI 代理流式请求失败'
+    sendStreamEvent(event, 'aiProxy:chat:stream-error', {
+      requestId: payload.requestId,
+      error,
+      errorCode: 'proxy_stream_exception'
+    })
+    await writeAppLog({
+      level: 'warning',
+      scope: 'aiProxy:chat:stream',
+      message: error,
+      details: { requestId: payload.requestId }
+    }).catch(() => false)
+    return false
+  }
+})
+
 ipcMain.handle('storage:get', async (_event, key: string) => {
   const store = await getStore()
   return store.get(key)
@@ -964,3 +1298,85 @@ ipcMain.handle('config:setApiKey', async (_event, apiKey: string) => {
 ipcMain.handle('config:getApiKey', async () => {
   return getApiKeyFromEnvOrStore()
 })
+
+ipcMain.handle('settings:get', async () => {
+  return readAppSettings()
+})
+
+ipcMain.handle('settings:set', async (_event, settings: AppSettingsRecord) => {
+  const normalized = normalizeAppSettings(settings)
+  const store = await getStore()
+  store.set(APP_SETTINGS_KEY, normalized)
+  return normalized
+})
+
+ipcMain.handle('app:getReleaseInfo', async () => {
+  const userDataPath = app.getPath('userData')
+  return {
+    appName: app.getName(),
+    version: app.getVersion(),
+    platform: process.platform,
+    userDataPath,
+    logsPath: path.join(userDataPath, 'logs')
+  }
+})
+
+ipcMain.handle('app:log', async (_event, payload: AppLogPayload) => {
+  return writeAppLog(payload)
+})
+
+ipcMain.handle('app:openUserDataPath', async (): Promise<AppPathActionResult> => {
+  const targetPath = app.getPath('userData')
+  return openLocalPath(targetPath)
+})
+
+ipcMain.handle('app:openLogsPath', async (): Promise<AppPathActionResult> => {
+  const targetPath = path.join(app.getPath('userData'), 'logs')
+  await fs.mkdir(targetPath, { recursive: true })
+  return openLocalPath(targetPath)
+})
+
+ipcMain.handle('app:exportLogs', async (): Promise<AppPathActionResult> => {
+  const userDataPath = app.getPath('userData')
+  const logsPath = path.join(userDataPath, 'logs')
+  const exportRoot = path.join(userDataPath, 'exports')
+  const exportPath = path.join(exportRoot, `logs-${formatFileTimestamp(new Date())}`)
+
+  try {
+    await fs.mkdir(exportRoot, { recursive: true })
+    await fs.mkdir(exportPath, { recursive: true })
+    await fs.cp(logsPath, exportPath, { recursive: true, force: true })
+    await fs.writeFile(path.join(exportPath, 'README.txt'), [
+      'AI 校园生存模拟器日志导出',
+      `Version: ${app.getVersion()}`,
+      `ExportedAt: ${new Date().toISOString()}`,
+      '请把整个文件夹发送给支持人员。'
+    ].join('\n'), 'utf8')
+    return { ok: true, path: exportPath }
+  } catch (err) {
+    return {
+      ok: false,
+      path: exportPath,
+      message: err instanceof Error ? err.message : '日志导出失败'
+    }
+  }
+})
+
+async function openLocalPath(targetPath: string): Promise<AppPathActionResult> {
+  try {
+    const errorMessage = await shell.openPath(targetPath)
+    return errorMessage
+      ? { ok: false, path: targetPath, message: errorMessage }
+      : { ok: true, path: targetPath }
+  } catch (err) {
+    return {
+      ok: false,
+      path: targetPath,
+      message: err instanceof Error ? err.message : '打开目录失败'
+    }
+  }
+}
+
+function formatFileTimestamp(date: Date): string {
+  return date.toISOString().replace(/[:.]/g, '-')
+}

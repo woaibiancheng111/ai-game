@@ -29,6 +29,10 @@ const ROLE_MAX_DELAY: Record<ConversationMessage['role'], number> = {
  * 下一条消息将在等待这个时间后才会弹出。
  */
 export function getMessageRevealDelay(message: Pick<ConversationMessage, 'role' | 'content'> | undefined): number {
+  if (isFastRevealEnabled()) {
+    return 20
+  }
+
   if (!message) {
     return 300
   }
@@ -48,4 +52,13 @@ export function getMessagesRevealDelay(messages: ConversationMessage[]): number 
   return messages.reduce((total, message) => {
     return total + getMessageRevealDelay(message)
   }, 0)
+}
+
+function isFastRevealEnabled(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  return params.get('fastReveal') === '1' || window.localStorage.getItem('aiGameFastReveal') === '1'
 }

@@ -4,8 +4,7 @@ import type { AuthSession, DbHealth, PlayerProfile } from '../../data/types'
 type LoginTab = 'account' | 'guest'
 
 interface SetupScreenProps {
-  onSubmit: (apiKey: string, playerName: string, profile?: PlayerProfile | null, session?: AuthSession | null) => void
-  initialApiKey?: string
+  onSubmit: (playerName: string, profile?: PlayerProfile | null, session?: AuthSession | null) => void
   initialPlayerName?: string
   profiles?: PlayerProfile[]
   currentProfileId?: string
@@ -15,30 +14,20 @@ interface SetupScreenProps {
 
 export default function SetupScreen({
   onSubmit,
-  initialApiKey = '',
   initialPlayerName = '',
   profiles = [],
   currentProfileId,
   onProfileSelect,
   dbHealth
 }: SetupScreenProps) {
-  const [activeTab, setActiveTab] = useState<LoginTab>('account')
+  const [activeTab, setActiveTab] = useState<LoginTab>('guest')
   const [playerName, setPlayerName] = useState(initialPlayerName)
-  const [apiKey, setApiKey] = useState(initialApiKey)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState(initialPlayerName)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [apiKeyDetected, setApiKeyDetected] = useState(Boolean(initialApiKey.trim()))
   const [error, setError] = useState('')
   const [testing, setTesting] = useState(false)
-
-  useEffect(() => {
-    if (initialApiKey.trim()) {
-      setApiKey(initialApiKey)
-      setApiKeyDetected(true)
-    }
-  }, [initialApiKey])
 
   useEffect(() => {
     if (initialPlayerName.trim()) {
@@ -46,27 +35,6 @@ export default function SetupScreen({
       setDisplayName(initialPlayerName)
     }
   }, [initialPlayerName])
-
-  const validateApiKey = async () => {
-    if (!apiKey.trim()) {
-      setError('请输入 API Key')
-      return false
-    }
-
-    await window.electronAPI.config.setApiKey(apiKey.trim())
-    const testResult = await window.electronAPI.llm.chat({
-      messages: [{ role: 'user', content: 'Hi' }],
-      model: 'qwen-plus',
-      temperature: 0.1
-    })
-
-    if (!testResult) {
-      setError('API Key 验证失败，请检查 Key 是否正确')
-      return false
-    }
-
-    return true
-  }
 
   const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,11 +44,6 @@ export default function SetupScreen({
     try {
       if (!username.trim() || !password.trim()) {
         setError('请输入账号和密码')
-        return
-      }
-
-      const apiOk = await validateApiKey()
-      if (!apiOk) {
         return
       }
 
@@ -100,7 +63,7 @@ export default function SetupScreen({
         return
       }
 
-      onSubmit(apiKey.trim(), authResult.profile.name, authResult.profile, authResult.session)
+      onSubmit(authResult.profile.name, authResult.profile, authResult.session)
     } catch (err) {
       setError(formatSetupError(err))
     } finally {
@@ -119,14 +82,9 @@ export default function SetupScreen({
         return
       }
 
-      const apiOk = await validateApiKey()
-      if (!apiOk) {
-        return
-      }
-
       const profile = await window.electronAPI.profiles.upsert(playerName.trim())
       const session = await window.electronAPI.auth.getSession()
-      onSubmit(apiKey.trim(), profile.name, profile, session)
+      onSubmit(profile.name, profile, session)
     } catch (err) {
       setError(formatSetupError(err))
     } finally {
@@ -135,7 +93,7 @@ export default function SetupScreen({
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} data-testid="setup-screen">
       <div style={styles.backdrop} />
       <div style={styles.card}>
         <div style={styles.logoArea}>
@@ -156,26 +114,24 @@ export default function SetupScreen({
         {activeTab === 'account' ? (
           <form onSubmit={handleAccountSubmit} style={styles.form}>
             <label style={styles.label}>账号</label>
-            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="请输入账号" style={styles.input} disabled={testing} />
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="请输入账号" style={styles.input} disabled={testing} data-testid="account-username-input" />
 
             <label style={styles.label}>密码</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码" style={styles.input} disabled={testing} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码" style={styles.input} disabled={testing} data-testid="account-password-input" />
 
             {isRegistering && (
               <>
                 <label style={styles.label}>显示名称</label>
-                <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} />
+                <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} data-testid="account-display-name-input" />
               </>
             )}
-
-            <ApiKeyField apiKey={apiKey} setApiKey={setApiKey} disabled={testing} detected={apiKeyDetected} />
 
             <button type="button" onClick={() => setIsRegistering(prev => !prev)} style={styles.linkButton}>
               {isRegistering ? '已有账号，返回登录' : '没有账号，注册一个'}
             </button>
 
             {error && <div style={styles.errorBox}>{error}</div>}
-            <button type="submit" style={styles.button} disabled={testing}>{testing ? '处理中...' : isRegistering ? '注册并开始' : '登录并开始'}</button>
+            <button type="submit" style={styles.button} disabled={testing} data-testid="account-start-button">{testing ? '处理中...' : isRegistering ? '注册并开始' : '登录并开始'}</button>
           </form>
         ) : (
           <form onSubmit={handleGuestSubmit} style={styles.form}>
@@ -203,10 +159,10 @@ export default function SetupScreen({
             )}
 
             <label style={styles.label}>你的姓名</label>
-            <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} />
-            <ApiKeyField apiKey={apiKey} setApiKey={setApiKey} disabled={testing} detected={apiKeyDetected} />
+            <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="例如：陈一鸣" maxLength={16} style={styles.input} disabled={testing} data-testid="guest-name-input" />
+            <div style={styles.autoHint}>商业版默认可离线游玩。AI 对话会在设置中配置代理后自动增强，未配置时使用静态剧情兜底。</div>
             {error && <div style={styles.errorBox}>{error}</div>}
-            <button type="submit" style={styles.button} disabled={testing}>{testing ? '验证中...' : '开始游戏'}</button>
+            <button type="submit" style={styles.button} disabled={testing} data-testid="guest-start-button">{testing ? '验证中...' : '开始游戏'}</button>
           </form>
         )}
       </div>
@@ -214,21 +170,9 @@ export default function SetupScreen({
   )
 }
 
-function ApiKeyField({ apiKey, setApiKey, disabled, detected }: { apiKey: string; setApiKey: (value: string) => void; disabled: boolean; detected: boolean }) {
-  return (
-    <>
-      <label style={styles.label}>百连/通义千问 API Key</label>
-      <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-xxxxxxxxxxxxxxxx" style={styles.input} disabled={disabled} />
-      {detected && <div style={styles.autoHint}>已自动读取 API Key，可直接开始游戏。</div>}
-    </>
-  )
-}
-
 function formatSetupError(err: unknown): string {
   const msg = err instanceof Error ? err.message : '未知错误'
-  if (msg.includes('API Key 未配置')) return 'API Key 不能为空'
-  if (msg.includes('401') || msg.includes('403')) return 'API Key 无效或已过期'
-  return `验证失败: ${msg}`
+  return `启动失败: ${msg}`
 }
 
 const styles: Record<string, React.CSSProperties> = {

@@ -21,7 +21,7 @@ interface MessageItemProps {
 
 const NPC_TYPEWRITER_BASE_DELAY = 24
 
-export default function DialogueBox({ node, messages, isLoading, skipReveal, spriteUrl, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
+export default function DialogueBox({ node, messages, isLoading, skipReveal, spriteUrl: _spriteUrl, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const previousMessageIds = useRef<string[]>([])
@@ -30,7 +30,7 @@ export default function DialogueBox({ node, messages, isLoading, skipReveal, spr
   const [typingNpcMessageIds, setTypingNpcMessageIds] = useState<Record<string, boolean>>({})
   const messageIds = useMemo(() => messages.map(msg => msg.id), [messages])
   const messageSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}`).join('|'), [messages])
-  const messageRevealSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}:${msg.isStreaming ? 'streaming' : 'static'}`).join('|'), [messages])
+
   const lastRevealTimeRef = useRef<number>(Date.now())
 
   const visibleContentSignature = useMemo(
@@ -178,15 +178,15 @@ export default function DialogueBox({ node, messages, isLoading, skipReveal, spr
   }, [hasHiddenMessages, hasTypingNpcMessages, onTypingChange])
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} data-testid="dialogue-box">
       <div style={styles.locationBar}>
         <div style={styles.locationLeft}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="#2dd4bf">
             <path d="M7 1C4.8 1 3 2.8 3 5c0 3.5 4 8 4 8s4-4.5 4-8c0-2.2-1.8-4-4-4zm0 5.5A1.5 1.5 0 1 1 7 3.5 1.5 1.5 0 0 1 7 6.5z"/>
           </svg>
-          <span style={styles.locationText}>{node?.location ?? '未知地点'}</span>
+          <span style={styles.locationText} data-testid="current-location">{node?.location ?? '未知地点'}</span>
         </div>
-        <span style={styles.nodeTitle}>{node?.title ?? ''}</span>
+        <span style={styles.nodeTitle} data-testid="current-node-title">{node?.title ?? ''}</span>
       </div>
 
       <div style={styles.scrollArea} ref={scrollRef}>

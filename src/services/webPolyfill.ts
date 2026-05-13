@@ -55,11 +55,14 @@ interface WebSaveSlot {
 // Stream event listeners
 type StreamChunkCb = (payload: { requestId: string; chunk: string }) => void
 type StreamEndCb = (payload: { requestId: string }) => void
-type StreamErrorCb = (payload: { requestId: string; error: string }) => void
+type StreamErrorCb = (payload: { requestId: string; error: string; errorCode?: string }) => void
 
 const streamChunkListeners = new Set<StreamChunkCb>()
 const streamEndListeners = new Set<StreamEndCb>()
 const streamErrorListeners = new Set<StreamErrorCb>()
+const proxyStreamChunkListeners = new Set<StreamChunkCb>()
+const proxyStreamEndListeners = new Set<StreamEndCb>()
+const proxyStreamErrorListeners = new Set<StreamErrorCb>()
 
 function getApiKey(): string | null {
   const stored = lsGet('config:apiKey')
@@ -172,6 +175,86 @@ async function llmChatStream(payload: { messages: Array<{ role: string; content:
   }
 }
 
+async function aiProxyChat(payload: { messages: Array<{ role: string; content: string }>; context?: unknown; model?: string; temperature?: number; max_tokens?: number; proxyUrl?: string }) {
+  if (!payload.proxyUrl?.trim()) {
+    return { ok: false, text: '', errorCode: 'proxy_not_configured', message: 'AI 代理地址未配置' }
+  }
+
+  try {
+    const response = await fetch(payload.proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: payload.model || 'qwen-plus',
+        messages: payload.messages,
+        context: payload.context,
+        temperature: payload.temperature ?? 0.7,
+        max_tokens: payload.max_tokens ?? 2000
+      })
+    })
+
+    if (!response.ok) {
+      return { ok: false, text: '', errorCode: `proxy_http_${response.status}`, message: await response.text() }
+    }
+
+    const contentType = response.headers.get('content-type') ?? ''
+    const data = contentType.includes('application/json') ? await response.json() : await response.text()
+    const text = extractChatContent(data).trim()
+    return text
+      ? { ok: true, text }
+      : { ok: false, text: '', errorCode: 'proxy_empty_response', message: 'AI 代理响应为空' }
+  } catch (err) {
+    return { ok: false, text: '', errorCode: 'proxy_exception', message: err instanceof Error ? err.message : 'AI 代理请求异常' }
+  }
+}
+
+async function aiProxyChatStream(payload: { messages: Array<{ role: string; content: string }>; context?: unknown; model?: string; temperature?: number; max_tokens?: number; requestId: string; proxyUrl?: string }): Promise<boolean> {
+  const result = await aiProxyChat(payload)
+  if (!result.ok) {
+    proxyStreamErrorListeners.forEach(cb => cb({ requestId: payload.requestId, error: result.message ?? 'AI 代理请求失败', errorCode: result.errorCode }))
+    return false
+  }
+
+  proxyStreamChunkListeners.forEach(cb => cb({ requestId: payload.requestId, chunk: result.text }))
+  proxyStreamEndListeners.forEach(cb => cb({ requestId: payload.requestId }))
+  return true
+}
+
+function extractChatContent(data: unknown): string {
+  if (typeof data === 'string') {
+    return data
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    return ''
+  }
+
+  const maybeData = data as {
+    text?: unknown
+    content?: unknown
+    choices?: Array<{ message?: { content?: unknown }; delta?: { content?: unknown } }>
+  }
+
+  if (typeof maybeData.text === 'string') {
+    return maybeData.text
+  }
+
+  if (typeof maybeData.content === 'string') {
+    return maybeData.content
+  }
+
+  const first = maybeData.choices?.[0]
+  if (typeof first?.message?.content === 'string') {
+    return first.message.content
+  }
+
+  if (typeof first?.delta?.content === 'string') {
+    return first.delta.content
+  }
+
+  return ''
+}
+
 function getProfiles(): WebPlayerProfile[] {
   const profiles = lsGet('profiles')
   return Array.isArray(profiles) ? profiles as WebPlayerProfile[] : []
@@ -205,6 +288,13 @@ export function initWebPolyfill(): void {
       onChatStreamEnd: (cb: StreamEndCb) => { streamEndListeners.add(cb); return () => { streamEndListeners.delete(cb) } },
       onChatStreamError: (cb: StreamErrorCb) => { streamErrorListeners.add(cb); return () => { streamErrorListeners.delete(cb) } },
       generateImage: async () => ''
+    },
+    aiProxy: {
+      chat: aiProxyChat,
+      chatStream: aiProxyChatStream,
+      onChatStreamChunk: (cb: StreamChunkCb) => { proxyStreamChunkListeners.add(cb); return () => { proxyStreamChunkListeners.delete(cb) } },
+      onChatStreamEnd: (cb: StreamEndCb) => { proxyStreamEndListeners.add(cb); return () => { proxyStreamEndListeners.delete(cb) } },
+      onChatStreamError: (cb: StreamErrorCb) => { proxyStreamErrorListeners.add(cb); return () => { proxyStreamErrorListeners.delete(cb) } }
     },
     storage: {
       get: async (key: string) => lsGet(key),
@@ -295,6 +385,28 @@ export function initWebPolyfill(): void {
     config: {
       setApiKey: async (apiKey: string) => { lsSet('config:apiKey', apiKey) },
       getApiKey: async () => getApiKey()
+    },
+    settings: {
+      get: async () => lsGet('settings:app'),
+      set: async (settings) => { lsSet('settings:app', settings); return settings }
+    },
+    app: {
+      getReleaseInfo: async () => ({
+        appName: 'AI 校园生存模拟器',
+        version: 'web-preview',
+        platform: 'web',
+        userDataPath: 'localStorage',
+        logsPath: 'console'
+      }),
+      log: async (payload) => {
+        if (payload.level === 'error') console.error(payload.scope, payload.message, payload.details)
+        else if (payload.level === 'warning') console.warn(payload.scope, payload.message, payload.details)
+        else console.info(payload.scope, payload.message, payload.details)
+        return true
+      },
+      openUserDataPath: async () => ({ ok: false, path: 'localStorage', message: 'Web 预览不支持打开本地数据目录' }),
+      openLogsPath: async () => ({ ok: false, path: 'console', message: 'Web 预览不支持打开日志目录' }),
+      exportLogs: async () => ({ ok: false, path: 'console', message: 'Web 预览不支持导出日志' })
     }
   }
 

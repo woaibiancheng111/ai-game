@@ -23,11 +23,32 @@ export interface LLMChatStreamEndEvent {
 export interface LLMChatStreamErrorEvent {
   requestId: string
   error: string
+  errorCode?: string
 }
 
 export interface ImageGenPayload {
   prompt: string
   model?: string
+}
+
+export interface AIProxyChatPayload {
+  messages: Array<{ role: string; content: string }>
+  context?: unknown
+  model?: string
+  temperature?: number
+  max_tokens?: number
+  proxyUrl?: string
+}
+
+export interface AIProxyChatStreamPayload extends AIProxyChatPayload {
+  requestId: string
+}
+
+export interface AIProxyChatResult {
+  ok: boolean
+  text: string
+  errorCode?: string
+  message?: string
 }
 
 export interface PlayerProfilePayload {
@@ -69,6 +90,29 @@ export interface DbHealthPayload {
   message: string
 }
 
+export interface AppSettingsPayload {
+  aiEnabled: boolean
+  aiAllowStreaming: boolean
+  aiProxyUrl: string
+  bgmEnabled: boolean
+  sfxEnabled: boolean
+  masterVolume: number
+  errorLoggingEnabled: boolean
+}
+
+export interface AppLogPayload {
+  level: 'info' | 'warning' | 'error'
+  scope: string
+  message: string
+  details?: unknown
+}
+
+export interface AppPathActionResult {
+  ok: boolean
+  path?: string
+  message?: string
+}
+
 const electronAPI = {
   llm: {
     chat: (payload: LLMChatPayload) => ipcRenderer.invoke('llm:chat', payload),
@@ -89,6 +133,25 @@ const electronAPI = {
       return () => ipcRenderer.off('llm:chat:stream-error', listener)
     },
     generateImage: (payload: ImageGenPayload) => ipcRenderer.invoke('llm:generateImage', payload)
+  },
+  aiProxy: {
+    chat: (payload: AIProxyChatPayload) => ipcRenderer.invoke('aiProxy:chat', payload),
+    chatStream: (payload: AIProxyChatStreamPayload) => ipcRenderer.invoke('aiProxy:chat:stream', payload),
+    onChatStreamChunk: (callback: (payload: LLMChatStreamChunkEvent) => void) => {
+      const listener = (_event: IpcRendererEvent, payload: LLMChatStreamChunkEvent) => callback(payload)
+      ipcRenderer.on('aiProxy:chat:stream-chunk', listener)
+      return () => ipcRenderer.off('aiProxy:chat:stream-chunk', listener)
+    },
+    onChatStreamEnd: (callback: (payload: LLMChatStreamEndEvent) => void) => {
+      const listener = (_event: IpcRendererEvent, payload: LLMChatStreamEndEvent) => callback(payload)
+      ipcRenderer.on('aiProxy:chat:stream-end', listener)
+      return () => ipcRenderer.off('aiProxy:chat:stream-end', listener)
+    },
+    onChatStreamError: (callback: (payload: LLMChatStreamErrorEvent) => void) => {
+      const listener = (_event: IpcRendererEvent, payload: LLMChatStreamErrorEvent) => callback(payload)
+      ipcRenderer.on('aiProxy:chat:stream-error', listener)
+      return () => ipcRenderer.off('aiProxy:chat:stream-error', listener)
+    }
   },
   storage: {
     get: (key: string) => ipcRenderer.invoke('storage:get', key),
@@ -126,6 +189,17 @@ const electronAPI = {
   config: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('config:setApiKey', apiKey),
     getApiKey: () => ipcRenderer.invoke('config:getApiKey')
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (settings: AppSettingsPayload) => ipcRenderer.invoke('settings:set', settings)
+  },
+  app: {
+    getReleaseInfo: () => ipcRenderer.invoke('app:getReleaseInfo'),
+    log: (payload: AppLogPayload) => ipcRenderer.invoke('app:log', payload),
+    openUserDataPath: () => ipcRenderer.invoke('app:openUserDataPath'),
+    openLogsPath: () => ipcRenderer.invoke('app:openLogsPath'),
+    exportLogs: () => ipcRenderer.invoke('app:exportLogs')
   }
 }
 

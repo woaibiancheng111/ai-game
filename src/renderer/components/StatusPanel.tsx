@@ -34,7 +34,7 @@ export default function StatusPanel({ gameState, open, onClose }: StatusPanelPro
   return (
     <>
       {open && <button type="button" aria-label="关闭状态面板" style={styles.scrim} onClick={onClose} />}
-      <aside style={{ ...styles.drawer, transform: open ? 'translateX(0)' : 'translateX(420px)' }}>
+      <aside style={{ ...styles.drawer, transform: open ? 'translateX(0)' : 'translateX(420px)' }} data-testid="status-panel">
         <div style={styles.header}>
           <div>
             <div style={styles.kicker}>Student File</div>

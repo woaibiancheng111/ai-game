@@ -169,6 +169,31 @@ export interface DbHealth {
   message: string
 }
 
+export interface AppSettings {
+  aiEnabled: boolean
+  aiAllowStreaming: boolean
+  aiProxyUrl: string
+  bgmEnabled: boolean
+  sfxEnabled: boolean
+  masterVolume: number
+  errorLoggingEnabled: boolean
+}
+
+export interface AppNotice {
+  id: string
+  type: 'success' | 'warning' | 'error' | 'info'
+  title: string
+  message: string
+}
+
+export interface AppReleaseInfo {
+  appName: string
+  version: string
+  platform: string
+  userDataPath: string
+  logsPath: string
+}
+
 export interface AchievementItem {
   id: string
   title: string

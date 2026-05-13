@@ -1,42 +1,48 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import DialogueBox from './components/DialogueBox'
 import DecisionPanel from './components/DecisionPanel'
 import StatusPanel from './components/StatusPanel'
 import SetupScreen from './components/SetupScreen'
 import MainMenu from './components/MainMenu'
 import GameOverScreen from './components/GameOverScreen'
-import type { AuthSession, DbHealth, GameSaveData, GameState, StoryNode, PlayerChoice, ConversationMessage, PlayerProfile, SaveSlotMeta } from '../data/types'
-import { chat as llmChat, chatStream as llmChatStream } from '../services/llm'
+import type { AppNotice, AppReleaseInfo, AppSettings, AuthSession, ConversationMessage, DbHealth, GameState, PlayerChoice, PlayerProfile, SaveSlotMeta, StoryNode } from '../data/types'
 import type { ChatMessage } from '../services/llm'
 import { buildConversationPrompt } from '../services/prompts'
-import { getEducationCardForProgress } from '../data/education/cards'
 import { getNPCById } from '../engine/npc'
-import { applyChoiceToGameState, createChapterGameState, createInitialGameState, enterNode, mergeFlags } from '../engine/state'
-import { canEnterNode, CHAPTERS, getChapterStartNode, getFirstNode, getNodeChoices, getStoryNode, getUnlockedActIds } from '../engine/story'
-import { AUTOSAVE_KEY, AUTOSAVE_SLOT_ID, UNLOCKED_ACTS_KEY, createSaveData } from '../engine/save'
+import { createInitialGameState } from '../engine/state'
+import { CHAPTERS, getUnlockedActIds } from '../engine/story'
+import { AUTOSAVE_SLOT_ID, UNLOCKED_ACTS_KEY, createSaveData } from '../engine/save'
+import { GameRuntime } from '../engine/runtime'
 import { getMessagesRevealDelay } from './utils/revealTiming'
 import { getUnlockedAchievementIds } from '../engine/achievements'
 import { soundEngine } from '../services/soundEngine'
-
-const getBackgroundImage = (location: string) => {
-  if (!location) return 'linear-gradient(135deg, #0b0b18 0%, #1a1040 100%)';
-  if (location.includes('宿舍')) return 'url(/backgrounds/dorm.png)';
-  if (location.includes('教室') || location.includes('上课') || location.includes('会议室')) return 'url(/backgrounds/classroom.png)';
-  if (location.includes('图书馆')) return 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)';
-  if (location.includes('湖') || location.includes('操场')) return 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)';
-  if (location.includes('食堂')) return 'linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%)';
-  if (location.includes('走廊') || location.includes('台阶') || location.includes('公告栏') || location.includes('大厅')) return 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)';
-  if (location.includes('洗手间')) return 'linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 100%)';
-  if (location.includes('毕业') || location.includes('典礼') || location.includes('林荫')) return 'linear-gradient(135deg, #141e30 0%, #243b55 100%)';
-  return 'url(/backgrounds/campus_gate.png)';
-};
+import { aiProxyClient } from '../services/aiProxyClient'
+import { logAppEvent } from '../services/appLog'
+import { loadAppSettings, mergeAppSettings, saveAppSettings } from '../services/settings'
+import { normalizeSaveData, saveRepository } from '../services/saveRepository'
 
 type GamePhase = 'setup' | 'menu' | 'playing' | 'gameover'
+
+const runtime = new GameRuntime()
+
+const getBackgroundImage = (location: string) => {
+  if (!location) return 'linear-gradient(135deg, #0b0b18 0%, #1a1040 100%)'
+  if (location.includes('宿舍')) return 'url(/backgrounds/dorm.png)'
+  if (location.includes('教室') || location.includes('上课') || location.includes('会议室')) return 'url(/backgrounds/classroom.png)'
+  if (location.includes('图书馆')) return 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
+  if (location.includes('湖') || location.includes('操场')) return 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)'
+  if (location.includes('食堂')) return 'linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%)'
+  if (location.includes('走廊') || location.includes('台阶') || location.includes('公告栏') || location.includes('大厅')) return 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)'
+  if (location.includes('洗手间')) return 'linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 100%)'
+  if (location.includes('毕业') || location.includes('典礼') || location.includes('林荫')) return 'linear-gradient(135deg, #141e30 0%, #243b55 100%)'
+  return 'url(/backgrounds/campus_gate.png)'
+}
 
 export default function App() {
   const [phase, setPhase] = useState<GamePhase>('setup')
   const [gameState, setGameState] = useState<GameState>(() => createInitialGameState())
-  const [initialApiKey, setInitialApiKey] = useState('')
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [releaseInfo, setReleaseInfo] = useState<AppReleaseInfo | null>(null)
   const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [hasAutosave, setHasAutosave] = useState(false)
   const [profiles, setProfiles] = useState<PlayerProfile[]>([])
@@ -53,51 +59,90 @@ export default function App() {
   const [isRevealing, setIsRevealing] = useState(false)
   const [skipReveal, setSkipReveal] = useState(false)
   const [statusPanelOpen, setStatusPanelOpen] = useState(false)
+  const [notices, setNotices] = useState<AppNotice[]>([])
+
+  const activeSettings = useMemo(() => settings ?? mergeAppSettings({
+    aiEnabled: true,
+    aiAllowStreaming: true,
+    aiProxyUrl: '',
+    bgmEnabled: true,
+    sfxEnabled: true,
+    masterVolume: 0.5,
+    errorLoggingEnabled: true
+  }, {}), [settings])
+
+  const showNotice = useCallback((notice: Omit<AppNotice, 'id'>) => {
+    const id = `notice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setNotices(prev => [{ ...notice, id }, ...prev].slice(0, 4))
+    window.setTimeout(() => {
+      setNotices(prev => prev.filter(item => item.id !== id))
+    }, notice.type === 'error' ? 6500 : 4200)
+  }, [])
 
   useEffect(() => {
+    soundEngine.setEnabled(activeSettings.bgmEnabled)
+    soundEngine.setVolume(activeSettings.masterVolume)
+  }, [activeSettings.bgmEnabled, activeSettings.masterVolume])
+
+  useEffect(() => {
+    if (!activeSettings.bgmEnabled) {
+      soundEngine.stopBGM()
+      return
+    }
+
     if (phase !== 'playing' || !gameState.currentLocation) {
       if (phase === 'menu') {
-        soundEngine.playBGM('/audio/menu_theme.mp3');
+        soundEngine.playBGM('preset:menu')
       } else {
-        soundEngine.stopBGM();
+        soundEngine.stopBGM()
       }
-      return;
+      return
     }
 
-    const loc = gameState.currentLocation.toLowerCase();
+    const loc = gameState.currentLocation.toLowerCase()
     if (loc.includes('宿舍')) {
-      soundEngine.playBGM('/audio/daily_life.mp3');
+      soundEngine.playBGM('preset:daily')
     } else if (loc.includes('教室') || loc.includes('图书馆')) {
-      soundEngine.playBGM('/audio/study_focus.mp3');
+      soundEngine.playBGM('preset:study')
     } else if (loc.includes('深夜') || loc.includes('暗') || loc.includes('哭')) {
-      soundEngine.playBGM('/audio/emotional_deep.mp3');
+      soundEngine.playBGM('preset:emotional')
     } else {
-      soundEngine.playBGM('/audio/campus_ambient.mp3');
+      soundEngine.playBGM('preset:campus')
     }
-  }, [phase, gameState.currentLocation]);
+  }, [activeSettings.bgmEnabled, phase, gameState.currentLocation])
 
   const persistAutosave = useCallback(async (nextState: GameState, nextMessages: ConversationMessage[]) => {
+    const saveData = createSaveData(nextState, normalizePersistedMessages(nextMessages))
     try {
-      const saveData = createSaveData(nextState, normalizePersistedMessages(nextMessages))
-      await window.electronAPI.storage.set(AUTOSAVE_KEY, saveData)
+      await saveRepository.writeLegacyAutosave(saveData)
       if (currentProfile) {
-        const writtenSave = await window.electronAPI.saves.write({
+        const writtenSlot = await saveRepository.write({
           slotId: AUTOSAVE_SLOT_ID,
           profileId: currentProfile.id,
           label: '自动存档',
-          savedAt: Date.now(),
           data: saveData
         })
-        const nextSlots = mergeSaveSlotMeta(saveSlots, writtenSave)
+        const nextSlots = mergeSaveSlotMeta(saveSlots, writtenSlot)
         setSaveSlots(nextSlots)
         const achievementIds = getUnlockedAchievementIds(nextState, nextSlots, syncedAchievementIds)
         setSyncedAchievementIds(achievementIds)
         await window.electronAPI.achievements.set(currentProfile.id, achievementIds)
       }
       setHasAutosave(true)
-    } catch {
+    } catch (err) {
+      showNotice({
+        type: 'error',
+        title: '自动存档失败',
+        message: '当前进度暂未写入存档。你可以稍后在菜单中手动保存。'
+      })
+      await logAppEvent({
+        level: 'error',
+        scope: 'autosave',
+        message: err instanceof Error ? err.message : '自动存档失败',
+        details: { currentNode: nextState.currentNode }
+      })
     }
-  }, [currentProfile, saveSlots, syncedAchievementIds])
+  }, [currentProfile, saveSlots, showNotice, syncedAchievementIds])
 
   const updateChapterProgress = useCallback(async (actId: string) => {
     const nextUnlocked = normalizeUnlockedActIds([...unlockedActIds, actId])
@@ -107,89 +152,84 @@ export default function App() {
       if (currentProfile) {
         await window.electronAPI.progress.set(currentProfile.id, nextUnlocked)
       }
-    } catch {
+    } catch (err) {
+      showNotice({
+        type: 'warning',
+        title: '章节进度暂未同步',
+        message: '不影响当前游玩，系统会继续保留本地自动存档。'
+      })
+      await logAppEvent({
+        level: 'warning',
+        scope: 'progress',
+        message: err instanceof Error ? err.message : '章节进度同步失败',
+        details: { actId }
+      })
     }
-  }, [currentProfile, unlockedActIds])
+  }, [currentProfile, showNotice, unlockedActIds])
 
   useEffect(() => {
     let cancelled = false
-    const fallbackTimer = setTimeout(() => {
-      if (!cancelled) {
-        setIsBootstrapping(false)
-      }
-    }, 2000)
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setIsBootstrapping(false)
+    }, 2500)
 
     const bootstrap = async () => {
       try {
-        const [savedApiKey, storedPlayerName, storedSave, storedProfiles, storedProfile, storedUnlockedActs, storedSession, health] = await Promise.all([
-          window.electronAPI.config.getApiKey(),
+        const [appSettings, storedPlayerName, legacyAutosave, storedProfiles, storedProfile, storedUnlockedActs, storedSession, health, info] = await Promise.all([
+          loadAppSettings(),
           window.electronAPI.storage.get('playerName'),
-          window.electronAPI.storage.get(AUTOSAVE_KEY),
+          saveRepository.readLegacyAutosave(),
           window.electronAPI.profiles.list(),
           window.electronAPI.profiles.getCurrent(),
           window.electronAPI.storage.get(UNLOCKED_ACTS_KEY),
           window.electronAPI.auth.getSession(),
-          window.electronAPI.db.health()
+          window.electronAPI.db.health(),
+          window.electronAPI.app.getReleaseInfo()
         ])
 
-        if (cancelled) {
-          return
-        }
+        if (cancelled) return
 
-        const resolvedName = typeof storedPlayerName === 'string' ? storedPlayerName.trim() : ''
-        const resolvedApiKey = typeof savedApiKey === 'string' ? savedApiKey.trim() : ''
-
-        if (resolvedApiKey) {
-          setInitialApiKey(resolvedApiKey)
-        }
-
+        setSettings(appSettings)
+        setReleaseInfo(info)
         setProfiles(storedProfiles)
         setAuthSession(storedSession)
         setDbHealth(health)
+
         let profileSaveSlots: SaveSlotMeta[] = []
         if (storedProfile) {
           setCurrentProfile(storedProfile)
-          const slots = await window.electronAPI.saves.list(storedProfile.id)
-          profileSaveSlots = normalizeSaveSlots(slots)
+          profileSaveSlots = await saveRepository.list(storedProfile.id)
           setSaveSlots(profileSaveSlots)
-          const hasRemoteAutosave = Boolean(profileSaveSlots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID))
-          if (hasRemoteAutosave) {
-            setHasAutosave(true)
-          }
+          setHasAutosave(Boolean(profileSaveSlots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
+
           const remoteProgress = await window.electronAPI.progress.get(storedProfile.id)
           if (Array.isArray(remoteProgress)) {
             setUnlockedActIds(normalizeUnlockedActIds(remoteProgress))
           }
+
           const remoteAchievements = await window.electronAPI.achievements.get(storedProfile.id)
           if (Array.isArray(remoteAchievements)) {
             setSyncedAchievementIds(normalizeAchievementIds(remoteAchievements))
           }
-        }
-        if (!storedProfile && Array.isArray(storedUnlockedActs)) {
+        } else if (Array.isArray(storedUnlockedActs)) {
           setUnlockedActIds(normalizeUnlockedActIds(storedUnlockedActs))
         }
 
+        const resolvedName = typeof storedPlayerName === 'string' ? storedPlayerName.trim() : ''
         const profileName = storedProfile?.name ?? resolvedName
         if (profileName) {
-          setGameState(prev => ({
-            ...prev,
-            playerName: profileName
-          }))
+          setGameState(prev => ({ ...prev, playerName: profileName }))
         }
 
         const remoteAutosave = storedProfile && profileSaveSlots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)
-          ? await window.electronAPI.saves.read(storedProfile.id, AUTOSAVE_SLOT_ID)
+          ? await saveRepository.read(storedProfile.id, AUTOSAVE_SLOT_ID)
           : null
         const legacyAutosaveMatchesProfile = storedProfile &&
-          isValidSaveData(storedSave) &&
-          storedSave.gameState.playerName === profileName
-        const resolvedAutosave = isValidSaveData(remoteAutosave)
-          ? remoteAutosave
-          : legacyAutosaveMatchesProfile || !storedProfile
-            ? storedSave
-            : null
+          legacyAutosave &&
+          legacyAutosave.gameState.playerName === profileName
+        const resolvedAutosave = remoteAutosave ?? (legacyAutosaveMatchesProfile || !storedProfile ? legacyAutosave : null)
 
-        if (isValidSaveData(resolvedAutosave)) {
+        if (resolvedAutosave) {
           setHasAutosave(true)
           setGameState(prev => ({
             ...resolvedAutosave.gameState,
@@ -197,14 +237,22 @@ export default function App() {
           }))
         }
 
-        if (resolvedApiKey && profileName) {
+        if (profileName) {
           setPhase('menu')
         }
-      } catch {
+      } catch (err) {
+        showNotice({
+          type: 'warning',
+          title: '启动配置读取异常',
+          message: '已进入本地降级模式，你仍然可以继续游戏。'
+        })
+        await logAppEvent({
+          level: 'warning',
+          scope: 'bootstrap',
+          message: err instanceof Error ? err.message : '启动配置读取异常'
+        })
       } finally {
-        if (!cancelled) {
-          setIsBootstrapping(false)
-        }
+        if (!cancelled) setIsBootstrapping(false)
       }
     }
 
@@ -212,9 +260,9 @@ export default function App() {
 
     return () => {
       cancelled = true
-      clearTimeout(fallbackTimer)
+      window.clearTimeout(fallbackTimer)
     }
-  }, [])
+  }, [showNotice])
 
   const generateNPCReply = useCallback(async (
     nextNode: StoryNode,
@@ -222,15 +270,11 @@ export default function App() {
     predictedState: GameState,
     messageId: string
   ): Promise<string | null> => {
-    if (!nextNode.npcId) {
-      return null
-    }
-
+    if (!nextNode.npcId) return null
     const npc = getNPCById(nextNode.npcId)
-    if (!npc) {
-      return null
-    }
+    if (!npc) return null
 
+    const fallbackLine = nextNode.npcFallbackText ?? npc.fallbackLines?.[0] ?? null
     const llmHistory: ChatMessage[] = historyMessages
       .filter(msg => msg.role === 'player' || msg.role === 'npc')
       .slice(-10)
@@ -238,341 +282,277 @@ export default function App() {
         role: msg.role === 'player' ? 'user' : 'assistant',
         content: msg.content
       }))
-
     const promptMessages = buildConversationPrompt(npc, llmHistory, {
       npc,
       playerName: predictedState.playerName,
       playerStatus: predictedState.playerStatus,
       npcAffection: predictedState.npcAffection,
       currentLocation: nextNode.location,
-      recentHistory: historyMessages
-        .slice(-6)
-        .map(msg => `${getHistoryRoleLabel(msg)}: ${msg.content}`)
-        .join('\n'),
+      recentHistory: historyMessages.slice(-6).map(msg => `${getHistoryRoleLabel(msg)}: ${msg.content}`).join('\n'),
       week: predictedState.week,
       day: predictedState.day
     })
 
+    const finishMessage = (content: string, streaming = false) => {
+      setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, content, isStreaming: streaming } : msg))
+    }
+
+    const fallback = async (reason: string) => {
+      if (fallbackLine) {
+        finishMessage(fallbackLine, false)
+      }
+      await logAppEvent({
+        level: 'warning',
+        scope: 'npc-ai',
+        message: reason,
+        details: { npcId: npc.id, nodeId: nextNode.id }
+      })
+      return fallbackLine
+    }
+
     try {
-      const streamedContent = (await llmChatStream(promptMessages, {
+      const result = await aiProxyClient.chatStream(promptMessages, {
+        npc,
+        playerName: predictedState.playerName,
+        currentNode: nextNode,
+        gameState: predictedState
+      }, {
         model: 'qwen-plus',
         temperature: 0.8,
         maxTokens: 400
-      }, {
-        onChunk: (partialText) => {
-          setMessages(prev => prev.map(msg => {
-            if (msg.id !== messageId) {
-              return msg
-            }
+      }, activeSettings, {
+        onChunk: partialText => finishMessage(partialText, true)
+      })
 
-            return {
-              ...msg,
-              content: partialText,
-              isStreaming: true
-            }
-          }))
-        }
-      })).trim()
-
-      if (!streamedContent) {
-        const fallbackLine = nextNode.npcFallbackText ?? npc.fallbackLines?.[0] ?? null
-        if (fallbackLine) {
-          setMessages(prev => prev.map(msg => {
-            if (msg.id !== messageId) {
-              return msg
-            }
-
-            return {
-              ...msg,
-              content: fallbackLine,
-              isStreaming: false
-            }
-          }))
-        }
-        return fallbackLine
+      if (result.ok && result.text.trim()) {
+        const text = result.text.trim()
+        finishMessage(text, false)
+        return text
       }
 
-      setMessages(prev => prev.map(msg => {
-        if (msg.id !== messageId) {
-          return msg
-        }
-
-        return {
-          ...msg,
-          content: streamedContent,
-          isStreaming: false
-        }
-      }))
-
-      return streamedContent
-    } catch (streamErr) {
-      console.warn('NPC 流式对话生成失败，尝试非流式兜底:', streamErr)
-      try {
-        const fallbackContent = (await llmChat(promptMessages, {
-          model: 'qwen-plus',
-          temperature: 0.8,
-          maxTokens: 400
-        })).trim()
-
-        if (!fallbackContent) {
-          const fallbackLine = nextNode.npcFallbackText ?? npc.fallbackLines?.[0] ?? null
-          if (fallbackLine) {
-            setMessages(prev => prev.map(msg => {
-              if (msg.id !== messageId) {
-                return msg
-              }
-
-              return {
-                ...msg,
-                content: fallbackLine,
-                isStreaming: false
-              }
-            }))
-          }
-          return fallbackLine
-        }
-
-        setMessages(prev => prev.map(msg => {
-          if (msg.id !== messageId) {
-            return msg
-          }
-
-          return {
-            ...msg,
-            content: fallbackContent,
-            isStreaming: false
-          }
-        }))
-
-        return fallbackContent
-      } catch (err) {
-        console.warn('NPC AI 对话生成失败，将继续使用静态剧情:', err)
-        const fallbackLine = nextNode.npcFallbackText ?? npc.fallbackLines?.[0] ?? null
-        if (fallbackLine) {
-          setMessages(prev => prev.map(msg => {
-            if (msg.id !== messageId) {
-              return msg
-            }
-
-            return {
-              ...msg,
-              content: fallbackLine,
-              isStreaming: false
-            }
-          }))
-        }
-        return fallbackLine
-      }
+      return fallback(result.message ?? result.errorCode ?? 'AI 代理未返回可用内容')
+    } catch (err) {
+      return fallback(err instanceof Error ? err.message : 'AI 代理异常')
     }
-  }, [])
+  }, [activeSettings])
 
-  const handleApiKeySubmit = useCallback(async (key: string, playerName: string, profile?: PlayerProfile | null, session?: AuthSession | null) => {
+  const handleSetupSubmit = useCallback(async (playerName: string, profile?: PlayerProfile | null, session?: AuthSession | null) => {
     const normalizedName = playerName.trim() || '新生'
-
     try {
-      await window.electronAPI.config.setApiKey(key)
       await window.electronAPI.storage.set('playerName', normalizedName)
       const resolvedProfile = profile ?? await window.electronAPI.profiles.upsert(normalizedName)
-      const nextProfiles = await window.electronAPI.profiles.list()
-      const slots = await window.electronAPI.saves.list(resolvedProfile.id)
-      const health = await window.electronAPI.db.health()
-      const remoteProgress = await window.electronAPI.progress.get(resolvedProfile.id)
-      const remoteAchievements = await window.electronAPI.achievements.get(resolvedProfile.id)
-      const normalizedSlots = normalizeSaveSlots(slots)
+      const [nextProfiles, slots, health, remoteProgress, remoteAchievements, nextSession] = await Promise.all([
+        window.electronAPI.profiles.list(),
+        saveRepository.list(resolvedProfile.id),
+        window.electronAPI.db.health(),
+        window.electronAPI.progress.get(resolvedProfile.id),
+        window.electronAPI.achievements.get(resolvedProfile.id),
+        session ? Promise.resolve(session) : window.electronAPI.auth.getSession()
+      ])
+
       setCurrentProfile(resolvedProfile)
       setProfiles(nextProfiles)
-      setSaveSlots(normalizedSlots)
-      setHasAutosave(Boolean(normalizedSlots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
-      if (Array.isArray(remoteProgress)) {
-        setUnlockedActIds(normalizeUnlockedActIds(remoteProgress))
-      }
-      if (Array.isArray(remoteAchievements)) {
-        setSyncedAchievementIds(normalizeAchievementIds(remoteAchievements))
-      } else {
-        setSyncedAchievementIds([])
-      }
-      setAuthSession(session ?? await window.electronAPI.auth.getSession())
+      setSaveSlots(slots)
+      setHasAutosave(Boolean(slots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
       setDbHealth(health)
-    } catch {
+      setAuthSession(nextSession)
+      setUnlockedActIds(Array.isArray(remoteProgress) ? normalizeUnlockedActIds(remoteProgress) : ['act1'])
+      setSyncedAchievementIds(Array.isArray(remoteAchievements) ? normalizeAchievementIds(remoteAchievements) : [])
+    } catch (err) {
+      showNotice({
+        type: 'warning',
+        title: '档案同步异常',
+        message: '已使用本地档案继续，稍后可以重新保存。'
+      })
+      await logAppEvent({
+        level: 'warning',
+        scope: 'setup',
+        message: err instanceof Error ? err.message : '档案同步异常'
+      })
     }
-    setGameState(prev => ({
-      ...prev,
-      playerName: normalizedName
-    }))
+
+    setGameState(prev => ({ ...prev, playerName: normalizedName }))
     setPhase('menu')
-  }, [])
+  }, [showNotice])
 
   const handleProfileSelect = useCallback(async (profileId: string) => {
     const profile = await window.electronAPI.profiles.setCurrent(profileId)
-    if (!profile) {
-      return
-    }
+    if (!profile) return
 
     setCurrentProfile(profile)
-    setGameState(prev => ({
-      ...prev,
-      playerName: profile.name
-    }))
-
-    const slots = await window.electronAPI.saves.list(profile.id)
-    const normalizedSlots = normalizeSaveSlots(slots)
-    setSaveSlots(normalizedSlots)
-    const saveData = await window.electronAPI.saves.read(profile.id, AUTOSAVE_SLOT_ID)
-    setHasAutosave(isValidSaveData(saveData) || Boolean(normalizedSlots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
+    setGameState(prev => ({ ...prev, playerName: profile.name }))
+    const slots = await saveRepository.list(profile.id)
+    setSaveSlots(slots)
+    const saveData = await saveRepository.read(profile.id, AUTOSAVE_SLOT_ID)
+    setHasAutosave(Boolean(saveData) || Boolean(slots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
     const remoteProgress = await window.electronAPI.progress.get(profile.id)
-    if (Array.isArray(remoteProgress)) {
-      setUnlockedActIds(normalizeUnlockedActIds(remoteProgress))
-    }
+    if (Array.isArray(remoteProgress)) setUnlockedActIds(normalizeUnlockedActIds(remoteProgress))
     const remoteAchievements = await window.electronAPI.achievements.get(profile.id)
     setSyncedAchievementIds(Array.isArray(remoteAchievements) ? normalizeAchievementIds(remoteAchievements) : [])
   }, [])
 
   const handleChoiceSelect = useCallback(async (choice: PlayerChoice) => {
-    const choiceAppliedState = applyChoiceToGameState(gameState, choice)
+    const result = runtime.selectChoice({ currentNode, gameState, messages, choice })
 
-    const now = Date.now()
-    const playerMsg: ConversationMessage = {
-      id: `player-${now}`,
-      role: 'player',
-      content: choice.text,
-      timestamp: now
-    }
-
-    const appendedMessages: ConversationMessage[] = [playerMsg]
-
-    if (choice.narrativeText) {
-      const narrationMsg: ConversationMessage = {
-        id: `narration-${now}`,
-        role: 'narration',
-        content: choice.narrativeText,
-        timestamp: now + 1
-      }
-      appendedMessages.push(narrationMsg)
-    }
-
-    const currentHistory = [...messages, ...appendedMessages]
-
-    setMessages(prev => [...prev, ...appendedMessages])
+    setMessages(prev => [...prev, ...result.playerMessages])
     setChoices([])
     setIsLoading(true)
-    await waitForReveal(appendedMessages)
+    await waitForReveal(result.playerMessages)
 
     try {
-      const nextNode = getStoryNode(choice.nextNodeId)
-      if (!nextNode) {
-        const fallbackMsg: ConversationMessage = {
-          id: `system-${Date.now()}`,
-          role: 'system',
-          content: '剧情节点丢失，已到达当前版本结尾。',
-          timestamp: Date.now()
-        }
-        setMessages(prev => [...prev, fallbackMsg])
+      if (result.kind === 'missing') {
+        setMessages(prev => [...prev, result.systemMessage])
         setPhase('gameover')
         return
       }
 
-      if (!canEnterNode(nextNode, choiceAppliedState)) {
-        const blockedMsg: ConversationMessage = {
-          id: `system-${Date.now()}`,
-          role: 'system',
-          content: '你现在还没有触发进入这个剧情的条件，故事转向了更稳妥的路线。',
-          timestamp: Date.now()
-        }
-        setMessages(prev => [...prev, blockedMsg])
-        setChoices(getNodeChoices(currentNode, choiceAppliedState))
+      if (result.kind === 'blocked') {
+        setMessages(prev => [...prev, result.systemMessage])
+        setChoices(result.choices)
         return
       }
 
-      const enteredState = enterNode(choiceAppliedState, nextNode)
-      const educationCard = getEducationCardForProgress(choice, nextNode, enteredState)
-      const stateWithEducationFlag = educationCard
-        ? {
-            ...enteredState,
-            flags: mergeFlags(enteredState.flags, { [`education:${educationCard.id}`]: true })
-          }
-        : enteredState
+      setCurrentNode(result.nextNode)
+      setGameState(result.state)
+      void updateChapterProgress(result.state.currentActId)
 
-      setCurrentNode(nextNode)
-      setGameState(stateWithEducationFlag)
-      void updateChapterProgress(stateWithEducationFlag.currentActId)
+      setMessages(prev => [...prev, result.narrationMessage])
+      await waitForReveal([result.narrationMessage])
 
-      const nextNodeNarration: ConversationMessage = {
-        id: `node-${nextNode.id}-${Date.now()}`,
-        role: 'narration',
-        content: nextNode.description,
-        timestamp: Date.now() + 1
-      }
-
-      const nextMessages: ConversationMessage[] = [nextNodeNarration]
-      if (educationCard) {
-        nextMessages.push({
-          id: `education-${educationCard.id}-${Date.now()}`,
-          role: 'education',
-          content: educationCard.body,
-          timestamp: Date.now() + 2,
-          educationCard
-        })
-      }
-
-      setMessages(prev => [...prev, nextNodeNarration])
-      await waitForReveal([nextNodeNarration])
-
-      if (educationCard) {
-        const educationMessage = nextMessages[nextMessages.length - 1]
+      const educationMessage = result.nextMessages.find(message => message.role === 'education')
+      if (educationMessage) {
         setMessages(prev => [...prev, educationMessage])
         await waitForReveal([educationMessage])
       }
 
       let npcReplyContent: string | null = null
       let npcMessageId: string | null = null
+      const nextMessages = [...result.nextMessages]
 
-      if (nextNode.npcId && getNPCById(nextNode.npcId)) {
-        npcMessageId = `npc-${nextNode.npcId}-${Date.now()}`
+      if (result.nextNode.npcId && getNPCById(result.nextNode.npcId)) {
+        npcMessageId = `npc-${result.nextNode.npcId}-${Date.now()}`
         const npcMessage: ConversationMessage = {
           id: npcMessageId,
           role: 'npc',
           content: '',
           timestamp: Date.now() + 2,
-          npcId: nextNode.npcId,
+          npcId: result.nextNode.npcId,
           isStreaming: true
         }
         nextMessages.push(npcMessage)
         setMessages(prev => [...prev, npcMessage])
-
-        npcReplyContent = await generateNPCReply(nextNode, [...currentHistory, nextNodeNarration], {
-          ...stateWithEducationFlag
-        }, npcMessageId)
+        npcReplyContent = await generateNPCReply(result.nextNode, [...result.historyMessages, result.narrationMessage], result.state, npcMessageId)
 
         if (!npcReplyContent) {
           setMessages(prev => prev.filter(msg => msg.id !== npcMessageId))
         }
       }
 
-      const postNodeChoices = getNodeChoices(nextNode, stateWithEducationFlag)
-      const finalMessages = [...currentHistory, ...nextMessages].map(msg => {
+      const finalMessages = [...result.historyMessages, ...nextMessages].map(msg => {
         if (msg.id === npcMessageId && npcReplyContent) {
-          return {
-            ...msg,
-            content: npcReplyContent,
-            isStreaming: false
-          }
+          return { ...msg, content: npcReplyContent, isStreaming: false }
         }
-
         return msg
       }).filter(msg => msg.id !== npcMessageId || Boolean(npcReplyContent))
-      await persistAutosave(stateWithEducationFlag, finalMessages)
 
-      if (postNodeChoices.length > 0) {
-        setChoices(postNodeChoices)
-      } else if (nextNode.isEnding) {
+      await persistAutosave(result.state, finalMessages)
+
+      if (result.choices.length > 0) {
+        setChoices(result.choices)
+      } else if (result.nextNode.isEnding) {
         setPhase('gameover')
       }
     } catch (err) {
-      console.error('加载下一节点失败:', err)
+      showNotice({
+        type: 'error',
+        title: '剧情推进失败',
+        message: '系统已保留当前画面，请返回首页读取最近存档后重试。'
+      })
+      await logAppEvent({
+        level: 'error',
+        scope: 'choice',
+        message: err instanceof Error ? err.message : '剧情推进失败',
+        details: { choiceId: choice.id }
+      })
     } finally {
       setIsLoading(false)
     }
-  }, [currentNode, gameState, messages, generateNPCReply, persistAutosave, updateChapterProgress])
+  }, [currentNode, gameState, generateNPCReply, messages, persistAutosave, showNotice, updateChapterProgress])
+
+  const startRuntimeResult = useCallback((result: ReturnType<GameRuntime['startChapter']>) => {
+    setPhase('playing')
+    setCurrentNode(result.node)
+    setGameState(result.state)
+    setMessages(result.messages)
+    setChoices(result.choices)
+    void persistAutosave(result.state, result.messages)
+  }, [persistAutosave])
+
+  const handleStartChapter = useCallback((actId: string) => {
+    void updateChapterProgress(actId)
+    startRuntimeResult(runtime.startChapter(actId, gameState.playerName))
+  }, [gameState.playerName, startRuntimeResult, updateChapterProgress])
+
+  const handleLoadRuntimeSave = useCallback((saveData: NonNullable<ReturnType<typeof normalizeSaveData>>) => {
+    const result = runtime.loadSave(saveData)
+    setSkipReveal(true)
+    setPhase('playing')
+    setGameState(result.state)
+    setCurrentNode(result.node)
+    setMessages(normalizePersistedMessages(result.messages))
+    setChoices(result.choices)
+    window.setTimeout(() => setSkipReveal(false), 100)
+  }, [])
+
+  const handleLoadAutosave = useCallback(async () => {
+    const profileSave = currentProfile ? await saveRepository.read(currentProfile.id, AUTOSAVE_SLOT_ID) : null
+    const resolvedSave = profileSave ?? await saveRepository.readLegacyAutosave()
+    if (!resolvedSave) {
+      showNotice({ type: 'warning', title: '没有可读取的自动存档', message: '开始新游戏后系统会自动保存进度。' })
+      return
+    }
+    handleLoadRuntimeSave(resolvedSave)
+  }, [currentProfile, handleLoadRuntimeSave, showNotice])
+
+  const handleLoadSave = useCallback(async (slotId: string) => {
+    if (!currentProfile) return
+    const saveData = await saveRepository.read(currentProfile.id, slotId)
+    if (!saveData) {
+      showNotice({ type: 'error', title: '存档读取失败', message: '该存档无法解析或已经损坏。' })
+      return
+    }
+    handleLoadRuntimeSave(saveData)
+  }, [currentProfile, handleLoadRuntimeSave, showNotice])
+
+  const handleManualSave = useCallback(async () => {
+    if (!currentProfile) {
+      showNotice({ type: 'warning', title: '没有当前档案', message: '请先创建或选择一个玩家档案。' })
+      return
+    }
+
+    try {
+      const saveData = createSaveData(gameState, normalizePersistedMessages(messages))
+      await saveRepository.write({
+        slotId: `manual-${Date.now()}`,
+        profileId: currentProfile.id,
+        label: `手动存档 ${new Date().toLocaleString()}`,
+        data: saveData
+      })
+      const slots = await saveRepository.list(currentProfile.id)
+      setSaveSlots(slots)
+      const achievementIds = getUnlockedAchievementIds(gameState, slots, syncedAchievementIds)
+      setSyncedAchievementIds(achievementIds)
+      await window.electronAPI.achievements.set(currentProfile.id, achievementIds)
+      showNotice({ type: 'success', title: '手动存档完成', message: '当前进度已保存。' })
+    } catch (err) {
+      showNotice({ type: 'error', title: '手动存档失败', message: '请检查磁盘空间或稍后重试。' })
+      await logAppEvent({
+        level: 'error',
+        scope: 'manual-save',
+        message: err instanceof Error ? err.message : '手动存档失败'
+      })
+    }
+  }, [currentProfile, gameState, messages, showNotice, syncedAchievementIds])
 
   const handleRetry = useCallback(() => {
     const resetState = createInitialGameState(gameState.playerName)
@@ -581,41 +561,13 @@ export default function App() {
     setMessages([])
     setChoices([])
     setCurrentNode(null)
-    void window.electronAPI.storage.delete(AUTOSAVE_KEY)
+    void saveRepository.deleteLegacyAutosave()
     setHasAutosave(false)
   }, [gameState.playerName])
 
-  const startFromNode = useCallback((node: StoryNode, baseState: GameState, seedMessages: ConversationMessage[] = []) => {
-    const nextState = enterNode(baseState, node)
-    const initialMessages = seedMessages.length > 0
-      ? seedMessages
-      : [{
-          id: `node-${node.id}-${Date.now()}`,
-          role: 'narration' as const,
-          content: node.description,
-          timestamp: Date.now()
-        }]
-
-    setPhase('playing')
-    setCurrentNode(node)
-    setGameState(nextState)
-    setMessages(initialMessages)
-    setChoices(getNodeChoices(node, nextState))
-    void persistAutosave(nextState, initialMessages)
-  }, [persistAutosave])
-
-  const handleStartChapter = useCallback((actId: string) => {
-    const node = getChapterStartNode(actId) ?? getFirstNode()
-    void updateChapterProgress(actId)
-    startFromNode(node, createChapterGameState(gameState.playerName, actId))
-  }, [gameState.playerName, startFromNode, updateChapterProgress])
-
   const handleRenamePlayer = useCallback(async (name: string) => {
     const normalizedName = name.trim() || '新生'
-    setGameState(prev => ({
-      ...prev,
-      playerName: normalizedName
-    }))
+    setGameState(prev => ({ ...prev, playerName: normalizedName }))
 
     try {
       await window.electronAPI.storage.set('playerName', normalizedName)
@@ -623,9 +575,16 @@ export default function App() {
       const nextProfiles = await window.electronAPI.profiles.list()
       setCurrentProfile(profile)
       setProfiles(nextProfiles)
-    } catch {
+      showNotice({ type: 'success', title: '档案已更新', message: `当前玩家名：${normalizedName}` })
+    } catch (err) {
+      showNotice({ type: 'warning', title: '名称保存失败', message: '本局内已更新显示名，但档案暂未同步。' })
+      await logAppEvent({
+        level: 'warning',
+        scope: 'rename',
+        message: err instanceof Error ? err.message : '名称保存失败'
+      })
     }
-  }, [])
+  }, [showNotice])
 
   const handleReturnHome = useCallback(() => {
     setPhase('menu')
@@ -636,81 +595,19 @@ export default function App() {
     setStatusPanelOpen(false)
   }, [])
 
-  const handleLoadAutosave = useCallback(async () => {
-    const storedSave = await window.electronAPI.storage.get(AUTOSAVE_KEY)
-    const profileSave = currentProfile
-      ? await window.electronAPI.saves.read(currentProfile.id, AUTOSAVE_SLOT_ID)
-      : null
-    const resolvedSave = isValidSaveData(profileSave) ? profileSave : storedSave
-
-    if (!isValidSaveData(resolvedSave)) {
-      return
-    }
-
-    const node = getStoryNode(resolvedSave.gameState.currentNode) ?? getFirstNode()
-    setSkipReveal(true)
-    setPhase('playing')
-    setGameState(resolvedSave.gameState)
-    setCurrentNode(node)
-    const savedMessages = resolvedSave.conversationHistories.main ?? []
-    setMessages(savedMessages)
-    setChoices(getNodeChoices(node, resolvedSave.gameState))
-    setTimeout(() => setSkipReveal(false), 100)
-  }, [currentProfile])
-
-  const handleLoadSave = useCallback(async (slotId: string) => {
-    if (!currentProfile) {
-      return
-    }
-
-    const saveData = await window.electronAPI.saves.read(currentProfile.id, slotId)
-    if (!isValidSaveData(saveData)) {
-      return
-    }
-
-    const node = getStoryNode(saveData.gameState.currentNode) ?? getFirstNode()
-    setSkipReveal(true)
-    setPhase('playing')
-    setGameState(saveData.gameState)
-    setCurrentNode(node)
-    const savedMessages = saveData.conversationHistories.main ?? []
-    setMessages(savedMessages)
-    setChoices(getNodeChoices(node, saveData.gameState))
-    setTimeout(() => setSkipReveal(false), 100)
-  }, [currentProfile])
-
-  const handleManualSave = useCallback(async () => {
-    if (!currentProfile) {
-      return
-    }
-
-    const saveData = createSaveData(gameState, normalizePersistedMessages(messages))
-    await window.electronAPI.saves.write({
-      slotId: `manual-${Date.now()}`,
-      profileId: currentProfile.id,
-      label: `手动存档 ${new Date().toLocaleString()}`,
-      savedAt: Date.now(),
-      data: saveData
-    })
-    const slots = await window.electronAPI.saves.list(currentProfile.id)
-    const normalizedSlots = normalizeSaveSlots(slots)
-    setSaveSlots(normalizedSlots)
-    const achievementIds = getUnlockedAchievementIds(gameState, normalizedSlots, syncedAchievementIds)
-    setSyncedAchievementIds(achievementIds)
-    await window.electronAPI.achievements.set(currentProfile.id, achievementIds)
-  }, [currentProfile, gameState, messages, syncedAchievementIds])
-
-  const handleUpdateApiKey = useCallback(async (apiKey: string) => {
-    await window.electronAPI.config.setApiKey(apiKey)
-    setInitialApiKey(apiKey)
-  }, [])
+  const handleUpdateSettings = useCallback(async (nextSettings: AppSettings) => {
+    const saved = await saveAppSettings(nextSettings)
+    setSettings(saved)
+    showNotice({ type: 'success', title: '设置已保存', message: '新的 AI、音频和日志配置已经生效。' })
+  }, [showNotice])
 
   const handleRefreshDbHealth = useCallback(async () => {
     const health = await window.electronAPI.db.health()
     const session = await window.electronAPI.auth.getSession()
     setDbHealth(health)
     setAuthSession(session)
-  }, [])
+    showNotice({ type: health.available ? 'success' : 'warning', title: '数据库状态已刷新', message: health.message })
+  }, [showNotice])
 
   const handleLogout = useCallback(async () => {
     await window.electronAPI.auth.logout()
@@ -733,91 +630,81 @@ export default function App() {
     setPhase('setup')
   }, [])
 
-  if (isBootstrapping) {
+  if (isBootstrapping || !settings) {
     return (
       <div style={styles.bootstrapContainer}>
-        <div style={styles.bootstrapCard}>
+        <div style={styles.bootstrapCard} data-testid="bootstrap-screen">
           <div style={styles.bootstrapTitle}>正在加载游戏配置...</div>
           <div style={styles.bootstrapHint}>首次启动或环境读取较慢时会稍等片刻。</div>
         </div>
+        <NoticeStack notices={notices} />
       </div>
     )
   }
 
   if (phase === 'setup') {
     return (
-      <SetupScreen
-        onSubmit={handleApiKeySubmit}
-        initialApiKey={initialApiKey}
-        initialPlayerName={gameState.playerName === '新生' ? '' : gameState.playerName}
-        profiles={profiles}
-        currentProfileId={currentProfile?.id}
-        onProfileSelect={handleProfileSelect}
-        dbHealth={dbHealth}
-      />
+      <>
+        <SetupScreen
+          onSubmit={handleSetupSubmit}
+          initialPlayerName={gameState.playerName === '新生' ? '' : gameState.playerName}
+          profiles={profiles}
+          currentProfileId={currentProfile?.id}
+          onProfileSelect={handleProfileSelect}
+          dbHealth={dbHealth}
+        />
+        <NoticeStack notices={notices} />
+      </>
     )
   }
 
   if (phase === 'menu') {
     return (
-      <MainMenu
-        playerName={gameState.playerName}
-        chapters={CHAPTERS}
-        unlockedActIds={getUnlockedActIds(gameState, hasAutosave, unlockedActIds)}
-        onStartChapter={handleStartChapter}
-        onRenamePlayer={handleRenamePlayer}
-        onLoadAutosave={handleLoadAutosave}
-        hasAutosave={hasAutosave}
-        saveSlots={saveSlots}
-        initialApiKey={initialApiKey}
-        onLoadSave={handleLoadSave}
-        onSaveManual={handleManualSave}
-        onUpdateApiKey={handleUpdateApiKey}
-        gameState={gameState}
-        authSession={authSession}
-        dbHealth={dbHealth}
-        syncedAchievementIds={syncedAchievementIds}
-        onRefreshDbHealth={handleRefreshDbHealth}
-        onLogout={handleLogout}
-      />
+      <>
+        <MainMenu
+          playerName={gameState.playerName}
+          chapters={CHAPTERS}
+          unlockedActIds={getUnlockedActIds(gameState, hasAutosave, unlockedActIds)}
+          onStartChapter={handleStartChapter}
+          onRenamePlayer={handleRenamePlayer}
+          onLoadAutosave={handleLoadAutosave}
+          hasAutosave={hasAutosave}
+          saveSlots={saveSlots}
+          settings={settings}
+          releaseInfo={releaseInfo}
+          onLoadSave={handleLoadSave}
+          onSaveManual={handleManualSave}
+          onUpdateSettings={handleUpdateSettings}
+          onShowNotice={showNotice}
+          gameState={gameState}
+          authSession={authSession}
+          dbHealth={dbHealth}
+          syncedAchievementIds={syncedAchievementIds}
+          onRefreshDbHealth={handleRefreshDbHealth}
+          onLogout={handleLogout}
+        />
+        <NoticeStack notices={notices} />
+      </>
     )
   }
 
   if (phase === 'gameover') {
     return (
-      <GameOverScreen
-        gameState={gameState}
-        onRetry={handleRetry}
-      />
+      <>
+        <GameOverScreen gameState={gameState} onRetry={handleRetry} />
+        <NoticeStack notices={notices} />
+      </>
     )
   }
 
-  const bgImage = gameState.currentSceneImageUrl ? `url(${gameState.currentSceneImageUrl})` : getBackgroundImage(gameState.currentLocation || '');
+  const bgImage = gameState.currentSceneImageUrl ? `url(${gameState.currentSceneImageUrl})` : getBackgroundImage(gameState.currentLocation || '')
 
   return (
-    <div className="scene-bg-transition" style={{ ...styles.container, background: `${bgImage} center/cover` }}>
+    <div className="scene-bg-transition" style={{ ...styles.container, background: `${bgImage} center/cover` }} data-testid="game-screen">
       <div style={styles.backgroundOverlay} />
-      <button
-        type="button"
-        onClick={handleReturnHome}
-        style={styles.homeButton}
-        title="返回首页"
-      >
-        首页
-      </button>
-      <button
-        type="button"
-        onClick={() => setStatusPanelOpen(true)}
-        style={styles.statusButton}
-        title="打开状态与手册"
-      >
-        状态 / 手册
-      </button>
-      <StatusPanel
-        gameState={gameState}
-        open={statusPanelOpen}
-        onClose={() => setStatusPanelOpen(false)}
-      />
+      <button type="button" onClick={handleReturnHome} style={styles.homeButton} title="返回首页" data-testid="home-button">首页</button>
+      <button type="button" onClick={() => setStatusPanelOpen(true)} style={styles.statusButton} title="打开状态与手册" data-testid="status-button">状态 / 手册</button>
+      <StatusPanel gameState={gameState} open={statusPanelOpen} onClose={() => setStatusPanelOpen(false)} />
       <div key={currentNode?.id ?? 'empty'} className="scene-fade-enter" style={styles.mainArea}>
         <DialogueBox
           node={currentNode}
@@ -834,17 +721,24 @@ export default function App() {
           emptyText={isRevealing ? '叙事展开中...' : undefined}
         />
       </div>
+      <NoticeStack notices={notices} />
     </div>
   )
 }
 
-function isValidSaveData(value: unknown): value is GameSaveData {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
+function NoticeStack({ notices }: { notices: AppNotice[] }) {
+  if (notices.length === 0) return null
 
-  const maybeSave = value as Partial<GameSaveData>
-  return maybeSave.version === '2' && typeof maybeSave.gameState === 'object' && maybeSave.gameState !== null
+  return (
+    <div style={styles.noticeStack} data-testid="notice-stack">
+      {notices.map(notice => (
+        <div key={notice.id} style={{ ...styles.noticeCard, ...NOTICE_STYLE[notice.type] }} data-testid={`notice-${notice.type}`}>
+          <div style={styles.noticeTitle}>{notice.title}</div>
+          <div style={styles.noticeMessage}>{notice.message}</div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function normalizeUnlockedActIds(value: unknown[]): string[] {
@@ -856,92 +750,33 @@ function normalizeAchievementIds(value: unknown[]): string[] {
   return Array.from(new Set(value.filter((item): item is string => typeof item === 'string')))
 }
 
-function normalizeSaveSlots(value: unknown[]): SaveSlotMeta[] {
-  return value.filter((item): item is SaveSlotMeta => {
-    if (typeof item !== 'object' || item === null) {
-      return false
-    }
-
-    const maybeSlot = item as Partial<SaveSlotMeta>
-    return typeof maybeSlot.slotId === 'string' &&
-      typeof maybeSlot.profileId === 'string' &&
-      typeof maybeSlot.label === 'string' &&
-      typeof maybeSlot.savedAt === 'number'
-  })
-}
-
-function mergeSaveSlotMeta(slots: SaveSlotMeta[], payload: unknown): SaveSlotMeta[] {
-  if (typeof payload !== 'object' || payload === null) {
-    return slots
-  }
-
-  const savePayload = payload as { slotId?: unknown; profileId?: unknown; label?: unknown; savedAt?: unknown; data?: unknown }
-  if (typeof savePayload.slotId !== 'string' || typeof savePayload.profileId !== 'string' || typeof savePayload.label !== 'string') {
-    return slots
-  }
-
-  const saveData = savePayload.data
-  const gameState = isValidSaveData(saveData) ? saveData.gameState : null
-  const nextSlot: SaveSlotMeta = {
-    slotId: savePayload.slotId,
-    profileId: savePayload.profileId,
-    label: savePayload.label,
-    savedAt: typeof savePayload.savedAt === 'number' ? savePayload.savedAt : Date.now(),
-    currentActId: gameState?.currentActId ?? '',
-    currentNode: gameState?.currentNode ?? '',
-    currentLocation: gameState?.currentLocation ?? '',
-    week: gameState?.week ?? 0,
-    day: gameState?.day ?? 0,
-    playerStatus: gameState?.playerStatus ?? {
-      gpa: 0,
-      money: 0,
-      social: 0,
-      reputation: 0,
-      energy: 0,
-      mood: 0,
-      trust: 0,
-      antiFraudAwareness: 0
-    }
-  }
-
-  return [nextSlot, ...slots.filter(slot => slot.slotId !== nextSlot.slotId)].sort((a, b) => b.savedAt - a.savedAt)
+function mergeSaveSlotMeta(slots: SaveSlotMeta[], slot: SaveSlotMeta): SaveSlotMeta[] {
+  return [slot, ...slots.filter(item => item.slotId !== slot.slotId)].sort((a, b) => b.savedAt - a.savedAt)
 }
 
 function waitForReveal(messagesToReveal: ConversationMessage[]): Promise<void> {
   const delay = getMessagesRevealDelay(messagesToReveal)
-
-  if (delay <= 0) {
-    return Promise.resolve()
-  }
-
+  if (delay <= 0) return Promise.resolve()
   return new Promise(resolve => window.setTimeout(resolve, delay))
 }
 
 function normalizePersistedMessages(messagesToPersist: ConversationMessage[]): ConversationMessage[] {
-  return messagesToPersist.map(message => ({
-    ...message,
-    isStreaming: false
-  }))
+  return messagesToPersist.map(message => ({ ...message, isStreaming: false }))
 }
 
 function getHistoryRoleLabel(message: ConversationMessage): string {
-  if (message.role === 'player') {
-    return '玩家'
-  }
-
-  if (message.role === 'npc') {
-    return message.npcId ? getNPCById(message.npcId)?.name ?? 'NPC' : 'NPC'
-  }
-
-  if (message.role === 'narration') {
-    return '旁白'
-  }
-
-  if (message.role === 'education') {
-    return '校园提示'
-  }
-
+  if (message.role === 'player') return '玩家'
+  if (message.role === 'npc') return message.npcId ? getNPCById(message.npcId)?.name ?? 'NPC' : 'NPC'
+  if (message.role === 'narration') return '旁白'
+  if (message.role === 'education') return '校园提示'
   return '系统'
+}
+
+const NOTICE_STYLE: Record<AppNotice['type'], React.CSSProperties> = {
+  success: { borderColor: 'rgba(74,222,128,0.35)', background: 'rgba(22,101,52,0.22)' },
+  warning: { borderColor: 'rgba(251,191,36,0.35)', background: 'rgba(113,63,18,0.24)' },
+  error: { borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(127,29,29,0.28)' },
+  info: { borderColor: 'rgba(96,165,250,0.35)', background: 'rgba(30,64,175,0.24)' }
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -1038,5 +873,36 @@ const styles: Record<string, React.CSSProperties> = {
     WebkitBackdropFilter: 'blur(12px)',
     cursor: 'pointer',
     letterSpacing: '1px'
+  },
+  noticeStack: {
+    position: 'fixed',
+    right: '22px',
+    bottom: '22px',
+    zIndex: 100,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    width: 'min(360px, calc(100vw - 44px))',
+    pointerEvents: 'none'
+  },
+  noticeCard: {
+    padding: '13px 15px',
+    borderRadius: '12px',
+    border: '1px solid rgba(148,163,184,0.2)',
+    color: '#e5e7eb',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+    boxShadow: '0 16px 44px rgba(0,0,0,0.38)',
+    animation: 'slideInUp 0.22s ease-out both'
+  },
+  noticeTitle: {
+    fontSize: '13px',
+    fontWeight: 900,
+    marginBottom: '5px'
+  },
+  noticeMessage: {
+    color: '#cbd5e1',
+    fontSize: '12px',
+    lineHeight: 1.55
   }
 }

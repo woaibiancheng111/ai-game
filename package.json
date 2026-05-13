@@ -2,14 +2,24 @@
   "name": "ai-campus-survival-simulator",
   "version": "1.0.0",
   "description": "AI 校园生存模拟器 - Campus Survival Simulator",
+  "author": "AI Campus Survival Team",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:dir": "tsc && vite build && electron-builder --dir",
     "build:vite": "tsc && vite build",
+    "dist:win": "tsc && vite build && electron-builder --win --x64",
     "preview": "vite preview",
     "electron:dev": "vite build && electron .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:story": "node scripts/validate-story.mjs",
+    "route:smoke": "node scripts/route-smoke.mjs",
+    "test:e2e:smoke": "npm run build:vite && node scripts/e2e-smoke.mjs",
+    "release:verify": "node scripts/release-verify.mjs",
+    "release:manifest": "node scripts/release-manifest.mjs",
+    "release:win": "npm run release:verify && npm run dist:win && npm run release:manifest",
+    "ai-proxy:dev": "node server/ai-proxy/server.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -40,6 +50,9 @@
       "dist-electron/**/*"
     ],
     "win": {
+      "icon": "public/icons/icon-512.png",
+      "sign": false,
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",

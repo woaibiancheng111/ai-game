@@ -23,7 +23,7 @@ export default function DecisionPanel({ choices, onSelect, disabled, emptyText =
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} data-testid="decision-panel">
       <div style={styles.header}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="#2dd4bf">
           <path d="M8 1.5L9.5 5.5H14L10.5 8L12 12L8 9.5L4 12L5.5 8L2 5.5H6.5L8 1.5Z"/>
@@ -36,6 +36,7 @@ export default function DecisionPanel({ choices, onSelect, disabled, emptyText =
             key={choice.id}
             onClick={() => onSelect(choice)}
             disabled={disabled}
+            data-testid={`choice-${choice.id}`}
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
             style={{
