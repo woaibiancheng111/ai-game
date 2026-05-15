@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { Eye, MessageSquare, UserRound } from 'lucide-react'
 import type { PlayerChoice } from '../../data/types'
 
 interface DecisionPanelProps {
@@ -8,157 +9,117 @@ interface DecisionPanelProps {
   emptyText?: string
 }
 
-export default function DecisionPanel({ choices, onSelect, disabled, emptyText = '等待下一步...' }: DecisionPanelProps) {
+export default function DecisionPanel({ choices, onSelect, disabled }: DecisionPanelProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [keyboardIndex, setKeyboardIndex] = useState<number | null>(null)
 
-  if (!choices || choices.length === 0) {
-    return (
-      <div style={styles.emptyContainer}>
-        <div style={styles.emptyHint}>
-          <span style={styles.emptyDot} />
-          {emptyText}
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (disabled || choices.length === 0) return
+    const handler = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+      const num = Number(event.key)
+      if (Number.isFinite(num) && num >= 1 && num <= choices.length) {
+        event.preventDefault()
+        setKeyboardIndex(num - 1)
+        window.setTimeout(() => {
+          onSelect(choices[num - 1])
+          setKeyboardIndex(null)
+        }, 80)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [choices, disabled, onSelect])
+
+  if (!choices || choices.length === 0) return null
 
   return (
-    <div style={styles.container} data-testid="decision-panel">
-      <div style={styles.header}>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="#2dd4bf">
-          <path d="M8 1.5L9.5 5.5H14L10.5 8L12 12L8 9.5L4 12L5.5 8L2 5.5H6.5L8 1.5Z"/>
-        </svg>
-        <span style={styles.headerText}>做出你的选择</span>
+    <div className="glass-panel" style={styles.container} data-testid="decision-panel">
+      <div style={styles.choiceList}>
+        {choices.map((choice, index) => {
+          const active = hoveredIndex === index || keyboardIndex === index
+          const Icon = index === 0 ? MessageSquare : index === 1 ? Eye : UserRound
+          return (
+            <button
+              key={choice.id}
+              onClick={() => onSelect(choice)}
+              disabled={disabled}
+              data-testid={`choice-${choice.id}`}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+              style={{
+                ...styles.choiceCard,
+                ...(active && !disabled ? styles.choiceCardActive : {}),
+                ...(disabled ? styles.choiceCardDisabled : {})
+              }}
+            >
+              <div style={styles.choiceNumber}>{String(index + 1).padStart(2, '0')}</div>
+              <Icon size={22} style={styles.choiceIcon} />
+              <div style={styles.choiceText}>{choice.text}</div>
+            </button>
+          )
+        })}
       </div>
-      <div style={styles.choicesGrid}>
-        {choices.map((choice, index) => (
-          <button
-            key={choice.id}
-            onClick={() => onSelect(choice)}
-            disabled={disabled}
-            data-testid={`choice-${choice.id}`}
-            onMouseEnter={() => setHoveredIndex(index)}
-            onMouseLeave={() => setHoveredIndex(null)}
-            style={{
-              ...styles.choiceButton,
-              ...(hoveredIndex === index && !disabled ? styles.choiceButtonHover : {}),
-              ...(disabled ? styles.choiceButtonDisabled : {})
-            }}
-          >
-            <span style={styles.choiceNumber}>
-              {String.fromCharCode(65 + index)}
-            </span>
-            <span style={styles.choiceText}>{choice.text}</span>
-          </button>
-        ))}
-      </div>
+      <div style={styles.hint}>按数字键 1-{choices.length} 快速选择</div>
     </div>
   )
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  emptyContainer: {
-    minHeight: '74px',
-    display: 'none', // Hide empty container to keep screen clean when no choices
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: '12px',
-    background: 'rgba(8,13,24,0.5)',
-    border: '1px solid rgba(148,163,184,0.1)',
-    backdropFilter: 'blur(10px)'
-  },
-  emptyHint: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#9898b0',
-    fontSize: '14px',
-    justifyContent: 'center'
-  },
-  emptyDot: {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    background: 'var(--color-primary)',
-    animation: 'pulseGlow 1.5s ease-in-out infinite'
-  },
   container: {
-    background: 'rgba(20,20,35,0.6)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: '20px',
-    border: '1px solid var(--color-border)',
-    padding: '24px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-    animation: 'slideInUp 0.4s ease-out'
+    width: 'min(980px, 100%)',
+    alignSelf: 'center',
+    borderRadius: '12px',
+    padding: '14px 16px 10px',
+    animation: 'slideInUp var(--transition-normal) both'
   },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginBottom: '16px',
-    fontSize: '14px',
-    color: 'var(--color-accent)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '2px',
-    fontWeight: 700,
-    textShadow: '0 0 8px var(--color-accent-glow)'
-  },
-  headerText: {
-    letterSpacing: '1px'
-  },
-  choicesGrid: {
+  choiceList: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: '10px'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+    gap: '14px'
   },
-  choiceButton: {
-    display: 'flex',
+  choiceCard: {
+    minHeight: '118px',
+    display: 'grid',
+    gridTemplateColumns: '44px 32px 1fr',
     alignItems: 'center',
-    gap: '16px',
-    minHeight: '58px',
-    padding: '16px 20px',
-    background: 'rgba(35,35,60,0.5)',
-    border: '1px solid rgba(124,106,247,0.3)',
-    borderRadius: '16px',
+    gap: '12px',
+    padding: '18px',
+    borderRadius: '10px',
+    textAlign: 'left',
+    background: 'rgba(255,255,255,0.055)',
+    border: '1px solid var(--color-border)',
     color: 'var(--color-text)',
-    textAlign: 'left' as const,
-    fontSize: '15px',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-    cursor: 'pointer',
-    position: 'relative' as const,
-    overflow: 'hidden'
+    boxShadow: '0 14px 32px rgba(0,0,0,0.22)'
   },
-  choiceButtonHover: {
-    background: 'rgba(124,106,247,0.2)',
-    border: '1px solid var(--color-primary)',
-    transform: 'translateY(-2px) scale(1.02)',
-    boxShadow: 'var(--shadow-glow)',
-    color: '#fff'
+  choiceCardActive: {
+    borderColor: 'var(--color-border-strong)',
+    background: 'linear-gradient(135deg, rgba(159,202,120,0.18), rgba(255,255,255,0.06))',
+    boxShadow: 'var(--shadow-glow)'
   },
-  choiceButtonDisabled: {
-    opacity: 0.5,
-    cursor: 'not-allowed',
-    transform: 'none',
-    boxShadow: 'none'
+  choiceCardDisabled: {
+    opacity: 0.48
   },
   choiceNumber: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '8px',
-    background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dim) 100%)',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    fontSize: '14px',
-    flexShrink: 0,
-    boxShadow: '0 2px 8px rgba(124,106,247,0.4)'
+    color: 'var(--color-primary)',
+    fontSize: '24px',
+    fontWeight: 900,
+    fontFamily: 'var(--font-mono)'
+  },
+  choiceIcon: {
+    color: 'var(--color-primary)'
   },
   choiceText: {
-    flex: 1,
-    lineHeight: 1.55,
+    color: 'var(--color-text)',
+    fontSize: '17px',
+    fontWeight: 800,
+    lineHeight: 1.45,
     overflowWrap: 'anywhere'
   },
+  hint: {
+    marginTop: '10px',
+    textAlign: 'center',
+    color: 'var(--color-text-muted)',
+    fontSize: '12px'
+  }
 }

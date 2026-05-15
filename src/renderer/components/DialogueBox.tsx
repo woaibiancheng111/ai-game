@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { StoryNode, ConversationMessage } from '../../data/types'
+import { CheckCircle2, MapPin, ShieldCheck } from 'lucide-react'
+import type { ConversationMessage, StoryNode } from '../../data/types'
 import { getNPCDisplayName, getNPCInitial } from '../../engine/npc'
 import { getMessageRevealDelay } from '../utils/revealTiming'
 
@@ -19,9 +20,9 @@ interface MessageItemProps {
   onNpcTypingTick: () => void
 }
 
-const NPC_TYPEWRITER_BASE_DELAY = 24
+const NPC_TYPEWRITER_BASE_DELAY = 22
 
-export default function DialogueBox({ node, messages, isLoading, skipReveal, spriteUrl: _spriteUrl, sceneImageUrl, onTypingChange }: DialogueBoxProps) {
+export default function DialogueBox({ node, messages, isLoading, skipReveal, onTypingChange }: DialogueBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const previousMessageIds = useRef<string[]>([])
@@ -30,34 +31,22 @@ export default function DialogueBox({ node, messages, isLoading, skipReveal, spr
   const [typingNpcMessageIds, setTypingNpcMessageIds] = useState<Record<string, boolean>>({})
   const messageIds = useMemo(() => messages.map(msg => msg.id), [messages])
   const messageSignature = useMemo(() => messages.map(msg => `${msg.id}:${msg.role}`).join('|'), [messages])
-
   const lastRevealTimeRef = useRef<number>(Date.now())
 
   const visibleContentSignature = useMemo(
-    () => messages
-      .slice(0, visibleMessageCount)
-      .map(msg => `${msg.id}:${msg.content.length}`)
-      .join('|'),
+    () => messages.slice(0, visibleMessageCount).map(msg => `${msg.id}:${msg.content.length}`).join('|'),
     [messages, visibleMessageCount]
   )
   const visibleMessageIdSignature = useMemo(
-    () => messages
-      .slice(0, visibleMessageCount)
-      .map(msg => msg.id)
-      .join('|'),
+    () => messages.slice(0, visibleMessageCount).map(msg => msg.id).join('|'),
     [messages, visibleMessageCount]
   )
 
   const scrollToBottom = useCallback(() => {
-    if (scrollFrame.current !== null) {
-      window.cancelAnimationFrame(scrollFrame.current)
-    }
-
+    if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current)
     scrollFrame.current = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
         scrollFrame.current = null
       })
@@ -66,95 +55,58 @@ export default function DialogueBox({ node, messages, isLoading, skipReveal, spr
 
   const handleNpcTypingChange = useCallback((messageId: string, typing: boolean) => {
     setTypingNpcMessageIds(prev => {
-      const alreadyTyping = Boolean(prev[messageId])
-
-      if (typing && alreadyTyping) {
-        return prev
-      }
-
-      if (!typing && !alreadyTyping) {
-        return prev
-      }
-
+      if (typing && prev[messageId]) return prev
+      if (!typing && !prev[messageId]) return prev
       if (!typing) {
         const next = { ...prev }
         delete next[messageId]
         return next
       }
-
-      return {
-        ...prev,
-        [messageId]: true
-      }
+      return { ...prev, [messageId]: true }
     })
   }, [])
 
-  const handleNpcTypingTick = useCallback(() => {
-    scrollToBottom()
-  }, [scrollToBottom])
+  const handleNpcTypingTick = useCallback(() => scrollToBottom(), [scrollToBottom])
 
   useEffect(() => {
     const previousIds = previousMessageIds.current
     const isSamePrefix = previousIds.every((id, index) => messageIds[index] === id)
-
-    if (skipReveal) {
-      setVisibleMessageCount(messages.length)
-    } else if (!isSamePrefix || messageIds.length < previousIds.length) {
-      setVisibleMessageCount(0)
-    } else {
-      setVisibleMessageCount(prev => Math.min(prev, messages.length))
-    }
-
+    if (skipReveal) setVisibleMessageCount(messages.length)
+    else if (!isSamePrefix || messageIds.length < previousIds.length) setVisibleMessageCount(0)
+    else setVisibleMessageCount(prev => Math.min(prev, messages.length))
     previousMessageIds.current = messageIds
   }, [messageIds, messages.length, skipReveal])
 
   useEffect(() => {
     const visibleIds = new Set(visibleMessageIdSignature ? visibleMessageIdSignature.split('|') : [])
-
     setTypingNpcMessageIds(prev => {
       let changed = false
       const next: Record<string, boolean> = {}
-
       for (const id of Object.keys(prev)) {
-        if (visibleIds.has(id)) {
-          next[id] = true
-        } else {
-          changed = true
-        }
+        if (visibleIds.has(id)) next[id] = true
+        else changed = true
       }
-
       return changed ? next : prev
     })
   }, [visibleMessageIdSignature])
 
   useEffect(() => {
-    if (visibleMessageCount >= messages.length) {
-      return
-    }
-
+    if (visibleMessageCount >= messages.length) return
     const previousMessage = visibleMessageCount > 0 ? messages[visibleMessageCount - 1] : null
     let requiredDelay = 0
-    if (previousMessage && !previousMessage.isStreaming) {
-      requiredDelay = getMessageRevealDelay(previousMessage)
-    } else if (previousMessage?.isStreaming) {
-      requiredDelay = 40
-    }
-
-    // 如果之前的消息很久以前就显示了，就不要再等了（比如刚点击选项，第一句话应该立刻出来）
+    if (previousMessage && !previousMessage.isStreaming) requiredDelay = getMessageRevealDelay(previousMessage)
+    else if (previousMessage?.isStreaming) requiredDelay = 40
     const timeSinceLastReveal = Date.now() - lastRevealTimeRef.current
     const remainingDelay = skipReveal ? 0 : Math.max(0, requiredDelay - timeSinceLastReveal)
-
     const timer = window.setTimeout(() => {
       setVisibleMessageCount(prev => Math.min(messages.length, prev + 1))
       lastRevealTimeRef.current = Date.now()
     }, remainingDelay)
-
     return () => window.clearTimeout(timer)
   }, [messages.length, visibleMessageCount, skipReveal])
 
   useLayoutEffect(() => {
     scrollToBottom()
-
     return () => {
       if (scrollFrame.current !== null) {
         window.cancelAnimationFrame(scrollFrame.current)
@@ -169,78 +121,48 @@ export default function DialogueBox({ node, messages, isLoading, skipReveal, spr
 
   const hasHiddenMessages = visibleMessageCount < messages.length
   const hasTypingNpcMessages = Object.keys(typingNpcMessageIds).length > 0
-  const hasVisibleStreamingMessage = messages
-    .slice(0, visibleMessageCount)
-    .some(msg => msg.isStreaming)
+  const hasVisibleStreamingMessage = messages.slice(0, visibleMessageCount).some(msg => msg.isStreaming)
 
   useEffect(() => {
     onTypingChange?.(hasHiddenMessages || hasTypingNpcMessages)
   }, [hasHiddenMessages, hasTypingNpcMessages, onTypingChange])
 
   return (
-    <div style={styles.container} data-testid="dialogue-box">
+    <section className="glass-panel-strong" style={styles.container} data-testid="dialogue-box">
       <div style={styles.locationBar}>
         <div style={styles.locationLeft}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="#2dd4bf">
-            <path d="M7 1C4.8 1 3 2.8 3 5c0 3.5 4 8 4 8s4-4.5 4-8c0-2.2-1.8-4-4-4zm0 5.5A1.5 1.5 0 1 1 7 3.5 1.5 1.5 0 0 1 7 6.5z"/>
-          </svg>
+          <MapPin size={20} color="var(--color-primary)" />
           <span style={styles.locationText} data-testid="current-location">{node?.location ?? '未知地点'}</span>
         </div>
         <span style={styles.nodeTitle} data-testid="current-node-title">{node?.title ?? ''}</span>
       </div>
 
       <div style={styles.scrollArea} ref={scrollRef}>
-        <div style={styles.scenePanel}>
-          {sceneImageUrl ? (
-            <img src={sceneImageUrl} alt={node?.title ?? '当前场景'} style={styles.sceneImage} />
-          ) : (
-            <div style={styles.scenePlaceholder}>
-              <div style={styles.sceneTitle}>{node?.title ?? '校园场景'}</div>
-              <div style={styles.scenePrompt}>{node?.imagePrompt ?? '关键剧情场景图将在这里展示。'}</div>
-            </div>
-          )}
-        </div>
+        {messages.length === 0 && node && (
+          <div style={styles.systemBox}>正在接入校园模拟网络...</div>
+        )}
 
-        <div style={styles.messageList}>
-          {messages.length === 0 && node && (
-            <div style={styles.narrationBox}>
-              <div style={styles.narrationKicker}>系统提示</div>
-              <p style={styles.narrationText}>正在接入校园模拟网络...</p>
-            </div>
-          )}
+        {messages.slice(0, visibleMessageCount).map(msg => (
+          <MessageItem key={msg.id} msg={msg} onNpcTypingChange={handleNpcTypingChange} onNpcTypingTick={handleNpcTypingTick} />
+        ))}
 
-          {messages.slice(0, visibleMessageCount).map(msg => (
-            <MessageItem
-              key={msg.id}
-              msg={msg}
-              onNpcTypingChange={handleNpcTypingChange}
-              onNpcTypingTick={handleNpcTypingTick}
-            />
-          ))}
-
-          {isLoading && !hasVisibleStreamingMessage && !hasTypingNpcMessages && (
-            <div style={styles.loadingRow}>
-              <div style={styles.loadingDots}>
-                <span style={{...styles.dot, animationDelay: '0ms'}} />
-                <span style={{...styles.dot, animationDelay: '200ms'}} />
-                <span style={{...styles.dot, animationDelay: '400ms'}} />
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} style={styles.bottomAnchor} />
-        </div>
+        {isLoading && !hasVisibleStreamingMessage && !hasTypingNpcMessages && (
+          <div style={styles.loadingRow}>
+            <span style={{ ...styles.dot, animationDelay: '0ms' }} />
+            <span style={{ ...styles.dot, animationDelay: '160ms' }} />
+            <span style={{ ...styles.dot, animationDelay: '320ms' }} />
+          </div>
+        )}
+        <div ref={bottomRef} style={{ height: 1 }} />
       </div>
-    </div>
+    </section>
   )
 }
 
 const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTypingTick }: MessageItemProps) {
   const [displayedNpcContent, setDisplayedNpcContent] = useState(() => getInitialNpcDisplayedContent(msg))
   const npcFullChars = useMemo(() => msg.role === 'npc' ? Array.from(msg.content) : [], [msg.content, msg.role])
-  const displayedNpcChars = useMemo(
-    () => msg.role === 'npc' ? Array.from(displayedNpcContent) : [],
-    [displayedNpcContent, msg.role]
-  )
+  const displayedNpcChars = useMemo(() => msg.role === 'npc' ? Array.from(displayedNpcContent) : [], [displayedNpcContent, msg.role])
   const isNpcTyping = msg.role === 'npc' && (msg.isStreaming || displayedNpcChars.length < npcFullChars.length)
 
   useEffect(() => {
@@ -255,7 +177,6 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
 
   useEffect(() => {
     if (msg.role !== 'npc' || !displayedNpcContent) return
-
     if (!msg.content.startsWith(displayedNpcContent)) {
       setDisplayedNpcContent(msg.content)
       onNpcTypingTick()
@@ -264,7 +185,6 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
 
   useEffect(() => {
     if (msg.role !== 'npc' || displayedNpcChars.length >= npcFullChars.length) return
-
     const nextChar = npcFullChars[displayedNpcChars.length] ?? ''
     const step = getNpcTypewriterStep(npcFullChars.length, displayedNpcChars.length)
     const timer = window.setTimeout(() => {
@@ -272,415 +192,300 @@ const MessageItem = memo(function MessageItem({ msg, onNpcTypingChange, onNpcTyp
       setDisplayedNpcContent(npcFullChars.slice(0, nextLength).join(''))
       onNpcTypingTick()
     }, getNpcTypewriterDelay(nextChar))
-
     return () => window.clearTimeout(timer)
   }, [displayedNpcChars.length, msg.role, npcFullChars, onNpcTypingTick])
 
   const shouldShowNpcCursor = msg.role === 'npc' && (msg.isStreaming || displayedNpcChars.length < npcFullChars.length)
 
-  return (
-    <div
-      style={{
-        ...styles.messageRow,
-        ...(msg.role === 'player' ? styles.playerMessageRow : styles.leftMessageRow)
-      }}
-    >
-      {msg.role === 'narration' && (
-        <div style={styles.narrationBox}>
-          <div style={styles.narrationKicker}>旁白</div>
-          <p style={styles.narrationText}>{msg.content}</p>
-        </div>
-      )}
+  if (msg.role === 'narration') {
+    return (
+      <div style={styles.narrationBox}>
+        <span style={styles.kicker}>旁白</span>
+        <p style={styles.narrationText}>{msg.content}</p>
+      </div>
+    )
+  }
 
-      {msg.role === 'player' && (
+  if (msg.role === 'player') {
+    return (
+      <div style={styles.playerRow}>
         <div style={styles.playerBubble}>
+          <span style={styles.speakerTag}>你</span>
           <p style={styles.playerText}>{msg.content}</p>
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {msg.role === 'npc' && (
+  if (msg.role === 'npc') {
+    return (
+      <div style={styles.npcRow}>
+        <div style={styles.npcAvatar}>{getNPCInitial(msg.npcId)}</div>
         <div style={styles.npcBubble}>
-          <div style={styles.npcAvatarSmall}>
-            <span style={styles.npcInitial}>
-              {getNPCInitial(msg.npcId)}
-            </span>
-          </div>
-          <div>
-            <div style={styles.npcName}>
-              {getNPCDisplayName(msg.npcId)}
-            </div>
-            <div style={{ ...styles.npcBubbleText, ...(msg.isStreaming ? styles.npcBubbleStreaming : {}) }}>
-              <p style={styles.npcText}>
-                {displayedNpcContent || (msg.isStreaming ? '思考中' : '')}
-                {shouldShowNpcCursor && <span style={styles.streamCursor} />}
-              </p>
-            </div>
-          </div>
+          <div style={styles.npcName}>{getNPCDisplayName(msg.npcId)}</div>
+          <p style={styles.npcText}>
+            {displayedNpcContent || (msg.isStreaming ? '思考中...' : '')}
+            {shouldShowNpcCursor && <span style={styles.cursor} />}
+          </p>
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {msg.role === 'education' && msg.educationCard && (
-        <div style={styles.educationCard}>
-          <div style={styles.educationHeader}>
-            <span style={styles.educationCategory}>{msg.educationCard.category}</span>
-            <span style={styles.educationTitle}>{msg.educationCard.title}</span>
-          </div>
-          <p style={styles.educationBody}>{msg.educationCard.body}</p>
-          <div style={styles.educationChecklist}>
-            {msg.educationCard.checklist.map(item => (
-              <div key={item} style={styles.educationChecklistItem}>
-                <span style={styles.educationCheck}>✓</span>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-          <p style={styles.educationAction}>{msg.educationCard.campusAction}</p>
+  if (msg.role === 'education' && msg.educationCard) {
+    return (
+      <div style={styles.educationCard}>
+        <div style={styles.educationHeader}>
+          <ShieldCheck size={22} />
+          <span style={styles.educationCategory}>教育卡片（{msg.educationCard.category}）</span>
         </div>
-      )}
+        <h3 style={styles.educationTitle}>{msg.educationCard.title}</h3>
+        <p style={styles.educationBody}>{msg.educationCard.body}</p>
+        <div style={styles.checkList}>
+          {msg.educationCard.checklist.map(item => (
+            <span key={item} style={styles.checkItem}><CheckCircle2 size={16} />{item}</span>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
-      {msg.role === 'system' && (
-        <div style={styles.systemBox}>
-          {msg.content}
-        </div>
-      )}
-    </div>
-  )
+  if (msg.role === 'system') {
+    return <div style={styles.systemBox}>{msg.content}</div>
+  }
+
+  return null
 })
 
 function getInitialNpcDisplayedContent(msg: ConversationMessage): string {
-  // 如果不是 NPC 消息，或者正在流式生成中（属于新消息），初始显示为空，准备打字机
-  if (msg.role !== 'npc' || msg.isStreaming) {
-    return ''
-  }
-
-  // 如果组件挂载时，消息已经不是 streaming 状态，说明它是历史消息
-  // 历史消息（如读档、跨越节点重绘等）应该直接显示完整内容，不要再打字
+  if (msg.role !== 'npc' || msg.isStreaming) return ''
   return msg.content
 }
 
 function getNpcTypewriterDelay(nextChar: string): number {
-  if (nextChar === '\n') {
-    return 90
-  }
-
-  if ('。！？!?；;'.includes(nextChar)) {
-    return 110
-  }
-
-  if ('，、,.：:'.includes(nextChar)) {
-    return 52
-  }
-
+  if (nextChar === '\n') return 90
+  if ('。！？!?；;'.includes(nextChar)) return 105
+  if ('，、,.：:'.includes(nextChar)) return 48
   return NPC_TYPEWRITER_BASE_DELAY
 }
 
 function getNpcTypewriterStep(totalChars: number, displayedChars: number): number {
   const remainingChars = totalChars - displayedChars
-
-  if (remainingChars > 120) {
-    return 3
-  }
-
-  if (remainingChars > 60) {
-    return 2
-  }
-
+  if (remainingChars > 120) return 3
+  if (remainingChars > 60) return 2
   return 1
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    background: 'rgba(20, 20, 35, 0.75)',
-    borderRadius: '24px',
-    border: '1px solid var(--color-border)',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+    width: 'min(1120px, 100%)',
+    alignSelf: 'center',
+    marginTop: 'auto',
+    borderRadius: '16px',
     overflow: 'hidden',
-    minHeight: 0,
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)'
+    height: 'clamp(320px, 54vh, 520px)',
+    minHeight: 300,
+    maxHeight: '58vh',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow:
+      '0 24px 72px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)'
   },
   locationBar: {
+    minHeight: 60,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    padding: '12px 24px',
-    background: 'linear-gradient(90deg, rgba(20,20,35,0.9), rgba(35,35,60,0.8))',
-    borderBottom: '1px solid rgba(124,106,247,0.3)',
-    fontSize: '14px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+    gap: 16,
+    padding: '0 28px',
+    borderBottom: '1px solid var(--color-border)',
+    background:
+      'linear-gradient(90deg, rgba(159,202,120,0.10), rgba(255,255,255,0.035)), rgba(3,7,6,0.26)'
   },
   locationLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: 10,
     minWidth: 0
   },
   locationText: {
-    color: '#99f6e4',
-    fontWeight: 700
+    color: 'var(--color-text)',
+    fontSize: 15,
+    fontWeight: 900
   },
   nodeTitle: {
-    color: '#cbd5e1',
-    fontSize: '12px',
-    padding: '4px 8px',
-    borderRadius: '8px',
-    background: 'rgba(15,23,42,0.58)',
-    border: '1px solid rgba(148,163,184,0.12)'
+    color: 'var(--color-text-dim)',
+    fontSize: 13,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
   },
   scrollArea: {
     flex: 1,
-    overflowY: 'auto' as const,
-    padding: '24px 28px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '24px',
-    scrollbarWidth: 'none' as const
-  },
-  scenePanel: {
-    width: '100%',
-    minHeight: '168px',
-    borderRadius: '10px',
-    overflow: 'hidden',
-    border: '1px solid rgba(45,212,191,0.16)',
-    background: 'linear-gradient(135deg, rgba(6,78,59,0.36), rgba(30,64,175,0.18), rgba(15,23,42,0.92))',
-    boxShadow: 'inset 0 -48px 80px rgba(2,6,23,0.4)',
-    flexShrink: 0
-  },
-  sceneImage: {
-    width: '100%',
-    height: '210px',
-    objectFit: 'cover'
-  },
-  scenePlaceholder: {
-    padding: '26px 28px',
-    minHeight: '168px',
+    overflowY: 'auto',
+    padding: '20px 28px 22px',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
-    gap: '10px'
-  },
-  sceneTitle: {
-    color: '#f8fafc',
-    fontSize: '24px',
-    fontWeight: 900
-  },
-  scenePrompt: {
-    color: '#cbd5e1',
-    fontSize: '13px',
-    lineHeight: 1.75,
-    maxWidth: '780px'
+    gap: 14,
+    boxShadow: 'inset 0 18px 38px rgba(0,0,0,0.12)'
   },
   narrationBox: {
-    background: 'linear-gradient(135deg, rgba(124,106,247,0.08), rgba(13,13,26,0.85))',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: '20px',
-    padding: '20px 24px',
-    border: '1px solid rgba(124,106,247,0.25)',
-    maxWidth: '94%',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-    animation: 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-    margin: '10px 0'
+    padding: '14px 20px',
+    borderLeft: '3px solid var(--color-primary)',
+    background: 'linear-gradient(135deg, rgba(159,202,120,0.08), rgba(255,255,255,0.035))',
+    borderRadius: 10,
+    animation: 'messageReveal var(--transition-normal) both'
   },
-  narrationKicker: {
-    color: '#93c5fd',
-    fontSize: '11px',
-    fontWeight: 700,
-    letterSpacing: '1px',
-    marginBottom: '6px'
+  kicker: {
+    display: 'block',
+    color: 'var(--color-primary)',
+    fontSize: 12,
+    fontWeight: 900,
+    marginBottom: 5
   },
   narrationText: {
-    fontSize: '15px',
-    color: '#dbeafe',
-    lineHeight: 1.8,
-    fontStyle: 'italic',
+    color: 'var(--color-text-dim)',
+    fontSize: 15,
+    lineHeight: 1.75,
     whiteSpace: 'pre-wrap'
   },
-  messageRow: {
+  playerRow: {
     display: 'flex',
-    alignItems: 'flex-end',
-    gap: '10px',
-    animation: 'messageReveal 0.52s ease-out both'
-  },
-  leftMessageRow: {
-    justifyContent: 'flex-start'
-  },
-  playerMessageRow: {
-    justifyContent: 'flex-end'
+    justifyContent: 'flex-end',
+    animation: 'messageReveal var(--transition-normal) both'
   },
   playerBubble: {
-    background: 'linear-gradient(135deg, #7c6af7, #5a4ad1)',
-    borderRadius: '24px 24px 4px 24px',
-    padding: '14px 22px',
-    maxWidth: '75%',
-    boxShadow: '0 10px 30px rgba(124,106,247,0.25)',
-    border: '1px solid rgba(255,255,255,0.1)'
+    maxWidth: '78%',
+    padding: '14px 19px',
+    borderRadius: '14px 14px 3px 14px',
+    background: 'linear-gradient(135deg, rgba(159,202,120,0.86), rgba(96,126,63,0.92))',
+    color: '#fff'
+  },
+  speakerTag: {
+    display: 'block',
+    fontSize: 12,
+    fontWeight: 900,
+    opacity: 0.82,
+    marginBottom: 4
   },
   playerText: {
-    fontSize: '15px',
-    color: '#fff',
-    lineHeight: 1.6
+    fontSize: 15,
+    lineHeight: 1.65
   },
-  npcBubble: {
+  npcRow: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '10px',
-    maxWidth: '78%'
+    gap: 14,
+    maxWidth: '90%',
+    animation: 'messageReveal var(--transition-normal) both'
   },
-  npcAvatarSmall: {
-    width: '38px',
-    height: '38px',
+  npcAvatar: {
+    width: 72,
+    height: 72,
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #f59e0b 0%, #38bdf8 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  npcInitial: {
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    background: 'linear-gradient(135deg, rgba(229,190,101,0.9), rgba(159,202,120,0.75))',
     color: '#fff',
-    fontSize: '16px',
-    fontWeight: 700
+    fontSize: 28,
+    fontWeight: 900,
+    boxShadow: 'var(--shadow-gold)'
+  },
+  npcBubble: {
+    minWidth: 0,
+    padding: '14px 20px',
+    borderRadius: '14px 14px 14px 3px',
+    background: 'linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.04))',
+    border: '1px solid var(--color-border)',
+    boxShadow: '0 14px 34px rgba(0,0,0,0.24)'
   },
   npcName: {
-    fontSize: '12px',
-    color: '#fbbf24',
-    marginBottom: '4px',
-    fontWeight: 500
-  },
-  npcBubbleText: {
-    background: 'rgba(20,20,35,0.82)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    borderRadius: '24px 24px 24px 4px',
-    padding: '16px 24px',
-    border: '1px solid rgba(124,106,247,0.35)',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-    position: 'relative'
-  },
-  npcBubbleStreaming: {
-    border: '1px solid var(--color-accent)',
-    boxShadow: '0 0 15px var(--color-accent-glow)'
+    color: 'var(--color-primary)',
+    fontSize: 18,
+    fontWeight: 900,
+    marginBottom: 5
   },
   npcText: {
-    fontSize: '15px',
-    color: '#e8e8f0',
-    lineHeight: 1.7,
+    color: 'var(--color-text)',
+    fontSize: 17,
+    lineHeight: 1.75,
     whiteSpace: 'pre-wrap'
   },
-  streamCursor: {
+  cursor: {
     display: 'inline-block',
-    width: '7px',
-    height: '1.15em',
-    marginLeft: '3px',
-    verticalAlign: '-0.18em',
-    borderRadius: '2px',
-    background: '#5eead4',
+    width: 8,
+    height: '1.05em',
+    marginLeft: 4,
+    verticalAlign: '-0.12em',
+    borderRadius: 2,
+    background: 'var(--color-primary)',
     animation: 'pulse 0.9s ease-in-out infinite'
   },
   educationCard: {
-    width: 'min(760px, 92%)',
-    background: 'linear-gradient(135deg, rgba(124,106,247,0.15), rgba(20,20,35,0.88))',
-    border: '1px solid var(--color-primary-glow)',
-    borderRadius: '16px',
-    padding: '20px 24px',
-    boxShadow: '0 10px 28px rgba(0,0,0,0.5)'
+    padding: 18,
+    borderRadius: 12,
+    border: '1px solid var(--color-border-strong)',
+    background: 'linear-gradient(135deg, rgba(159,202,120,0.16), rgba(255,255,255,0.055))',
+    boxShadow: 'var(--shadow-glow)',
+    animation: 'messageReveal var(--transition-normal) both'
   },
   educationHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    marginBottom: '8px'
+    gap: 8,
+    color: 'var(--color-primary)',
+    fontSize: 13,
+    fontWeight: 900,
+    marginBottom: 8
   },
   educationCategory: {
-    padding: '3px 8px',
-    borderRadius: '8px',
-    background: 'rgba(45,212,191,0.16)',
-    color: '#5eead4',
-    fontSize: '11px',
-    fontWeight: 700
+    color: 'var(--color-primary)'
   },
   educationTitle: {
-    color: '#e8e8f0',
-    fontSize: '15px',
-    fontWeight: 700
+    color: 'var(--color-text)',
+    fontSize: 18,
+    fontWeight: 900,
+    marginBottom: 8
   },
   educationBody: {
-    color: '#c8c8e0',
-    fontSize: '14px',
-    lineHeight: 1.75,
-    marginBottom: '10px'
+    color: 'var(--color-text-dim)',
+    fontSize: 14,
+    lineHeight: 1.7,
+    marginBottom: 12
   },
-  educationChecklist: {
+  checkList: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-    gap: '8px',
-    marginBottom: '10px'
+    gap: 8
   },
-  educationChecklistItem: {
-    display: 'flex',
-    gap: '7px',
-    color: '#d8d8ef',
-    fontSize: '13px',
-    lineHeight: 1.5
-  },
-  educationCheck: {
-    color: '#5eead4',
-    fontWeight: 800
-  },
-  educationAction: {
-    color: '#9ca3af',
-    fontSize: '12px',
-    lineHeight: 1.6,
-    borderTop: '1px solid rgba(255,255,255,0.08)',
-    paddingTop: '9px'
+  checkItem: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    color: 'var(--color-text)',
+    fontSize: 13
   },
   systemBox: {
-    maxWidth: '88%',
-    background: 'rgba(0, 240, 255, 0.1)',
-    border: '1px solid rgba(0, 240, 255, 0.3)',
-    borderRadius: '16px',
-    padding: '14px 20px',
-    color: '#e8e8f0',
-    fontSize: '14px',
-    lineHeight: 1.6,
-    textShadow: '0 0 8px rgba(0, 240, 255, 0.4)'
+    alignSelf: 'flex-start',
+    padding: '10px 14px',
+    borderRadius: 10,
+    background: 'rgba(142,185,214,0.12)',
+    border: '1px solid rgba(142,185,214,0.28)',
+    color: 'var(--color-text-dim)',
+    fontSize: 14,
+    lineHeight: 1.6
   },
   loadingRow: {
     display: 'flex',
-    alignItems: 'center'
-  },
-  loadingDots: {
-    display: 'flex',
-    gap: '4px',
-    padding: '10px 16px',
-    background: 'rgba(37,37,64,0.9)',
-    borderRadius: '16px'
+    gap: 6,
+    padding: '10px 0'
   },
   dot: {
-    width: '6px',
-    height: '6px',
+    width: 7,
+    height: 7,
     borderRadius: '50%',
-    background: '#7c6af7',
-    animation: 'pulse 1.2s ease-in-out infinite'
-  },
-  stageArea: {
-    position: 'relative',
-    flex: '1', // 占据剩余空间
-    width: '100%',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  bottomAnchor: {
-    width: '100%',
-    height: '1px',
-    flexShrink: 0
+    background: 'var(--color-primary)',
+    animation: 'typingDot 1.1s ease-in-out infinite'
   }
 }

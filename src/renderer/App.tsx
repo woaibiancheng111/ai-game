@@ -5,6 +5,7 @@ import StatusPanel from './components/StatusPanel'
 import SetupScreen from './components/SetupScreen'
 import MainMenu from './components/MainMenu'
 import GameOverScreen from './components/GameOverScreen'
+import { Gauge, Home, MapPin, Menu, RotateCcw, Save, SkipForward, UserRound } from 'lucide-react'
 import type { AppNotice, AppReleaseInfo, AppSettings, AuthSession, ConversationMessage, DbHealth, GameState, PlayerChoice, PlayerProfile, SaveSlotMeta, StoryNode } from '../data/types'
 import type { ChatMessage } from '../services/llm'
 import { buildConversationPrompt } from '../services/prompts'
@@ -702,8 +703,27 @@ export default function App() {
   return (
     <div className="scene-bg-transition" style={{ ...styles.container, background: `${bgImage} center/cover` }} data-testid="game-screen">
       <div style={styles.backgroundOverlay} />
-      <button type="button" onClick={handleReturnHome} style={styles.homeButton} title="返回首页" data-testid="home-button">首页</button>
-      <button type="button" onClick={() => setStatusPanelOpen(true)} style={styles.statusButton} title="打开状态与手册" data-testid="status-button">状态 / 手册</button>
+      <header className="glass-panel" style={styles.gameTopBar}>
+        <div style={styles.topLeftGroup}>
+          <button type="button" onClick={handleReturnHome} style={styles.squareButton} title="返回首页" data-testid="home-button">
+            <Home size={22} />
+          </button>
+          <div style={styles.actLabel}>ACT {String(gameState.currentAct).padStart(2, '0')}</div>
+          <div style={styles.nodeLabel}>{currentNode?.title ?? '校园生活'}</div>
+        </div>
+        <div style={styles.locationPill}>
+          <MapPin size={18} />
+          <span>{gameState.currentLocation || currentNode?.location || '校园'}</span>
+        </div>
+        <div style={styles.topActionGroup}>
+          <button type="button" style={styles.topAction}><RotateCcw size={18} /> 回看</button>
+          <button type="button" style={styles.topAction}><Gauge size={18} /> 自动</button>
+          <button type="button" style={styles.topAction}><SkipForward size={18} /> 跳过</button>
+          <button type="button" onClick={handleManualSave} style={styles.topAction}><Save size={18} /> 存档</button>
+          <button type="button" onClick={() => setStatusPanelOpen(true)} style={styles.topAction} title="打开状态与手册" data-testid="status-button"><UserRound size={18} /> 档案</button>
+          <button type="button" style={styles.squareButton}><Menu size={22} /></button>
+        </div>
+      </header>
       <StatusPanel gameState={gameState} open={statusPanelOpen} onClose={() => setStatusPanelOpen(false)} />
       <div key={currentNode?.id ?? 'empty'} className="scene-fade-enter" style={styles.mainArea}>
         <DialogueBox
@@ -786,11 +806,11 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     width: '100vw',
     height: '100vh',
-    background: 'radial-gradient(ellipse at center, #13132a 0%, #0b0b18 75%)'
+    background: 'radial-gradient(ellipse at center, #1e261d 0%, #07110f 75%)'
   },
   bootstrapCard: {
-    background: 'rgba(26,26,46,0.8)',
-    border: '1px solid #2a2a4c',
+    background: 'var(--color-surface-strong)',
+    border: '1px solid var(--color-border)',
     borderRadius: '14px',
     padding: '20px 24px',
     minWidth: '320px',
@@ -798,13 +818,13 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 12px 30px rgba(0,0,0,0.35)'
   },
   bootstrapTitle: {
-    color: '#e8e8f0',
+    color: 'var(--color-text)',
     fontSize: '16px',
     fontWeight: 600,
     marginBottom: '8px'
   },
   bootstrapHint: {
-    color: '#9898b0',
+    color: 'var(--color-text-dim)',
     fontSize: '13px'
   },
   container: {
@@ -821,7 +841,8 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'linear-gradient(180deg, rgba(11,11,24,0.1) 0%, rgba(11,11,24,0.6) 60%, rgba(11,11,24,0.95) 100%)',
+    background:
+      'radial-gradient(circle at 78% 12%, rgba(229, 190, 101, 0.12), transparent 34%), linear-gradient(90deg, rgba(3,7,6,0.52), rgba(3,7,6,0.18) 50%, rgba(3,7,6,0.62)), linear-gradient(180deg, rgba(3,7,6,0.12) 0%, rgba(3,7,6,0.86) 100%)',
     zIndex: 0,
     pointerEvents: 'none' as const
   },
@@ -832,47 +853,83 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     width: '100%',
-    maxWidth: '1200px',
+    maxWidth: '1280px',
     margin: '0 auto',
-    padding: '80px 24px 24px',
-    gap: '20px',
+    padding: '118px 34px 28px',
+    gap: '16px',
     overflow: 'hidden'
   },
-  homeButton: {
+  gameTopBar: {
     position: 'fixed',
-    left: '24px',
-    top: '24px',
+    left: '30px',
+    right: '30px',
+    top: '22px',
     zIndex: 20,
-    padding: '10px 20px',
-    background: 'rgba(20, 20, 35, 0.65)',
-    border: '1px solid var(--color-border)',
-    borderRadius: '12px',
-    color: 'var(--color-text)',
-    fontSize: '14px',
-    fontWeight: 700,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    cursor: 'pointer',
-    letterSpacing: '1px'
+    minHeight: '58px',
+    display: 'grid',
+    gridTemplateColumns: '1fr auto 1fr',
+    alignItems: 'center',
+    gap: '18px',
+    padding: '8px',
+    borderRadius: '12px'
   },
-  statusButton: {
-    position: 'fixed',
-    right: '24px',
-    top: '24px',
-    zIndex: 20,
-    padding: '10px 20px',
-    background: 'rgba(20, 20, 35, 0.65)',
+  topLeftGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    minWidth: 0
+  },
+  squareButton: {
+    width: '42px',
+    height: '42px',
+    borderRadius: '8px',
+    display: 'inline-grid',
+    placeItems: 'center',
+    background: 'rgba(255,255,255,0.065)',
     border: '1px solid var(--color-border)',
-    borderRadius: '12px',
+    color: 'var(--color-text)'
+  },
+  actLabel: {
     color: 'var(--color-primary)',
+    fontSize: '20px',
+    fontWeight: 900,
+    fontFamily: 'var(--font-mono)'
+  },
+  nodeLabel: {
+    color: 'var(--color-text)',
+    fontSize: '18px',
+    fontWeight: 900,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
+  },
+  locationPill: {
+    justifySelf: 'center',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '9px',
+    color: 'var(--color-text-dim)',
+    fontSize: '15px',
+    fontWeight: 700
+  },
+  topActionGroup: {
+    justifySelf: 'end',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  topAction: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '7px',
+    minHeight: '42px',
+    padding: '0 12px',
+    borderRadius: '8px',
+    color: 'var(--color-text-dim)',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid transparent',
     fontSize: '14px',
-    fontWeight: 700,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    cursor: 'pointer',
-    letterSpacing: '1px'
+    fontWeight: 800
   },
   noticeStack: {
     position: 'fixed',
