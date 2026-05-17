@@ -18,11 +18,17 @@ npm install
 cp .env.example .env
 ```
 
-商业版默认支持离线游玩，未配置 AI 代理时会使用静态剧情台词兜底。需要 AI NPC 增强时，在 `.env` 中配置代理地址：
+商业版默认支持离线游玩，也默认内置线上 AI 代理地址：
+
+```text
+https://ai.shixi.chat/chat
+```
+
+玩家无需手动填写代理地址。需要改用本地或自建代理时，可以在设置页修改，也可以在 `.env` 中配置代理地址：
 
 ```env
-# 可选：AI 服务端代理
-AI_PROXY_URL=http://localhost:8787/chat
+# 可选：覆盖默认 AI 服务端代理
+AI_PROXY_URL=https://ai.shixi.chat/chat
 
 # 可选：MySQL 数据库配置（不填则默认使用本地模式）
 MYSQL_HOST=localhost
@@ -34,7 +40,7 @@ MYSQL_PASSWORD=123456
 
 - 本地 AI 代理可用 `npm run ai-proxy:dev` 启动，接口为 `POST http://localhost:8787/chat`。
 - 代理服务读取 `AI_PROVIDER_API_KEY` 或 `DASHSCOPE_API_KEY`，真实供应商 Key 不进入 Electron 客户端。
-- 旧版本地调试仍兼容 `VITE_DASHSCOPE_API_KEY`，但商业版建议通过服务端代理隐藏供应商 Key。
+- 旧版本地调试仍保留直接 LLM 通道，但 NPC 对话当前走服务端代理；商业版应通过代理隐藏供应商 Key。
 
 ### 3. 启动开发模式
 
@@ -89,12 +95,16 @@ d:\ai-game\
 ├── electron/          # Electron 主进程代码
 │   ├── main.ts        # 主进程入口
 │   └── preload.ts     # 预加载脚本
+├── public/            # 背景图、图标、BGM 等静态资源
+├── server/            # AI 代理服务
+├── scripts/           # 验收、烟测和发布脚本
+├── docs/              # 发布、隐私和签名说明
 ├── src/               # React 渲染进程代码
 │   ├── engine/        # 游戏引擎核心
-│   ├── services/      # 服务层（LLM API、存储）
+│   ├── services/      # 服务层（AI 代理、存储、设置、音频）
 │   ├── data/          # 游戏数据（NPC、剧情）
 │   └── renderer/      # React UI 组件
-└── dist-electron/     # 编译后的 Electron 代码
+└── dist*/release/output/ # 构建、安装包和烟测输出目录（已忽略）
 ```
 
 ## 技术栈
@@ -115,9 +125,9 @@ d:\ai-game\
 
 - 本地优先存档，MySQL 不可用时自动降级
 - 可见保存/错误提示，错误日志写入应用数据目录
-- AI 代理、流式输出、音频、音量和日志开关可在设置中调整
+- AI 代理默认使用 `https://ai.shixi.chat/chat`，流式输出、音频、音量和日志开关可在设置中调整
 - 设置页支持测试 AI 代理、打开数据目录、打开日志目录、导出日志包和恢复默认设置
-- 无音频资源时使用内置轻量音景兜底，避免缺失文件导致体验断裂
+- 已内置轻音乐 BGM：`public/audio/bgm/menu.ogg` 和 `public/audio/bgm/daily.ogg`
 - 剧情图可通过 `npm run validate:story` 做自动验收，降低新增章节时的断链风险
 - 8 章主线可通过 `npm run route:smoke` 自动巡检到毕业结局
 - Electron 可玩流程可通过 `npm run test:e2e:smoke` 自动验收，失败时会输出截图到 `output/smoke/`
