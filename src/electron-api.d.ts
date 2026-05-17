@@ -159,6 +159,7 @@ interface ElectronAPI {
     list: (profileId: string) => Promise<unknown[]>
     write: (payload: SaveSlotPayload) => Promise<SaveSlotPayload>
     read: (profileId: string, slotId: string) => Promise<unknown>
+    delete: (profileId: string, slotId: string) => Promise<boolean>
   }
   progress: {
     get: (profileId: string) => Promise<unknown>

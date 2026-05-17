@@ -176,7 +176,8 @@ const electronAPI = {
   saves: {
     list: (profileId: string) => ipcRenderer.invoke('saves:list', profileId),
     write: (payload: SaveSlotPayload) => ipcRenderer.invoke('saves:write', payload),
-    read: (profileId: string, slotId: string) => ipcRenderer.invoke('saves:read', profileId, slotId)
+    read: (profileId: string, slotId: string) => ipcRenderer.invoke('saves:read', profileId, slotId),
+    delete: (profileId: string, slotId: string) => ipcRenderer.invoke('saves:delete', profileId, slotId)
   },
   progress: {
     get: (profileId: string) => ipcRenderer.invoke('progress:get', profileId),

@@ -32,6 +32,7 @@ import { getAchievements } from '../../engine/achievements'
 import { DEFAULT_APP_SETTINGS } from '../../services/settings'
 
 type MenuTab = 'start' | 'saves' | 'achievements' | 'settings'
+type SettingsSection = 'account' | 'ai' | 'experience' | 'audio' | 'school' | 'about'
 
 interface MainMenuProps {
   playerName: string
@@ -49,6 +50,7 @@ interface MainMenuProps {
   onRenamePlayer?: (name: string) => void
   onLoadAutosave?: () => void
   onLoadSave?: (slotId: string) => void
+  onDeleteSave?: (slotId: string) => void
   onSaveManual?: () => void
   onUpdateSettings?: (settings: AppSettings) => void
   onShowNotice?: (notice: { type: 'success' | 'warning' | 'error' | 'info'; title: string; message: string }) => void
@@ -89,6 +91,15 @@ const CHAPTER_ACCENTS: Record<string, string> = {
   act8: '#9fca78'
 }
 
+const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
+  { id: 'account', label: '账号与数据', icon: <Database size={21} /> },
+  { id: 'ai', label: 'AI 代理设置', icon: <Zap size={21} /> },
+  { id: 'experience', label: '游戏体验', icon: <Gamepad2 size={21} /> },
+  { id: 'audio', label: '音频设置', icon: <Bell size={21} /> },
+  { id: 'school', label: '学校信息', icon: <BookOpen size={21} /> },
+  { id: 'about', label: '关于游戏', icon: <CircleHelp size={21} /> }
+]
+
 export default function MainMenu({
   playerName,
   gameState,
@@ -105,6 +116,7 @@ export default function MainMenu({
   onRenamePlayer,
   onLoadAutosave,
   onLoadSave,
+  onDeleteSave,
   onSaveManual,
   onUpdateSettings,
   onShowNotice,
@@ -117,6 +129,7 @@ export default function MainMenu({
   const [isRenaming, setIsRenaming] = useState(false)
   const [draftName, setDraftName] = useState(playerName)
   const [draftSettings, setDraftSettings] = useState(settings)
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>('experience')
   const [aiProxyTesting, setAiProxyTesting] = useState(false)
   const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 940 : false)
 
@@ -385,15 +398,40 @@ export default function MainMenu({
               )}
               {saveSlots.length === 0 && !hasAutosave && <div style={styles.emptyBox}>当前没有可读取的存档。开始游戏后系统会自动保存进度。</div>}
               {saveSlots.map(save => (
-                <button key={save.slotId} type="button" onClick={() => onLoadSave?.(save.slotId)} style={styles.saveRow} data-testid={`save-slot-${save.slotId}`}>
+                <div
+                  key={save.slotId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onLoadSave?.(save.slotId)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onLoadSave?.(save.slotId)
+                    }
+                  }}
+                  style={styles.saveRow}
+                  data-testid={`save-slot-${save.slotId}`}
+                >
                   <img src={CHAPTER_IMAGES[save.currentActId] ?? '/backgrounds/campus_gate.png'} alt="" style={styles.saveThumbSmall} />
                   <div style={styles.saveBody}>
                     <h3 style={styles.saveTitle}>{save.label}</h3>
                     <p style={styles.saveMeta}>{save.currentLocation} · 第 {save.week} 周</p>
                   </div>
                   <div style={styles.saveTime}>{new Date(save.savedAt).toLocaleString('zh-CN')}</div>
-                  <Trash2 size={18} color="var(--color-text-muted)" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation()
+                      onDeleteSave?.(save.slotId)
+                    }}
+                    aria-label={`删除存档 ${save.label}`}
+                    title="删除存档"
+                    style={styles.saveDeleteButton}
+                    data-testid={`delete-save-${save.slotId}`}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               ))}
             </div>
           </section>
@@ -438,47 +476,80 @@ export default function MainMenu({
             <PanelHeader kicker="Settings" title="设置中心" subtitle="调整视觉小说体验、AI 代理、音频与本地数据。" />
             <div style={styles.settingsLayout}>
               <aside style={styles.settingsSide}>
-                {['账号与数据', 'AI 代理设置', '游戏体验', '音频设置', '学校信息', '关于游戏'].map((item, index) => (
-                  <div key={item} style={{ ...styles.settingsSideItem, ...(index === 2 ? styles.settingsSideItemActive : {}) }}>
-                    {index === 0 ? <Database size={21} /> : index === 1 ? <Zap size={21} /> : index === 2 ? <Gamepad2 size={21} /> : index === 3 ? <Bell size={21} /> : index === 4 ? <BookOpen size={21} /> : <CircleHelp size={21} />}
-                    {item}
-                  </div>
+                {SETTINGS_SECTIONS.map(section => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSettingsSection(section.id)}
+                    style={{
+                      ...styles.settingsSideItem,
+                      ...(activeSettingsSection === section.id ? styles.settingsSideItemActive : {})
+                    }}
+                    data-testid={`settings-section-${section.id}`}
+                  >
+                    {section.icon}
+                    {section.label}
+                  </button>
                 ))}
               </aside>
 
               <div style={styles.settingsContent}>
-                <SettingBlock title="视觉小说体验" icon={<BookOpen size={24} />}>
-                  <ToggleRow label="启用 AI 对话增强" checked={draftSettings.aiEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, aiEnabled: v }))} />
-                  <ToggleRow label="优先使用流式输出" checked={draftSettings.aiAllowStreaming} onChange={v => setDraftSettings(prev => ({ ...prev, aiAllowStreaming: v }))} />
-                  <label style={styles.settingLabel}>AI 代理地址</label>
-                  <input value={draftSettings.aiProxyUrl} onChange={event => setDraftSettings(prev => ({ ...prev, aiProxyUrl: event.target.value }))} placeholder="https://your-ai-proxy.example.com/chat" style={styles.settingInput} />
-                  <button type="button" onClick={handleTestAIProxy} disabled={aiProxyTesting} className="small-icon-button">{aiProxyTesting ? '测试中...' : '测试 AI 代理'}</button>
-                </SettingBlock>
+                {activeSettingsSection === 'account' && (
+                  <SettingBlock title="账号与数据" icon={<ShieldCheck size={24} />}>
+                    <div style={styles.settingValue}>{authSession?.mode === 'account' ? `账号：${authSession.username ?? authSession.displayName}` : authSession?.mode === 'guest' ? '昵称档案模式' : '本地模式'}</div>
+                    <div style={dbHealth?.available ? styles.dbOk : styles.dbWarn}>{dbHealth?.message ?? '正在检测数据库状态'}</div>
+                    <div style={styles.settingActions}>
+                      <button type="button" onClick={onRefreshDbHealth} className="small-icon-button">刷新数据库状态</button>
+                      <button type="button" onClick={onLogout} className="small-icon-button">退出当前档案</button>
+                    </div>
+                  </SettingBlock>
+                )}
 
-                <SettingBlock title="界面显示与音频" icon={<Settings size={24} />}>
-                  <ToggleRow label="启用背景音景" checked={draftSettings.bgmEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, bgmEnabled: v }))} />
-                  <ToggleRow label="启用按钮音效" checked={draftSettings.sfxEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, sfxEnabled: v }))} />
-                  <label style={styles.settingLabel}>主音量 {Math.round(draftSettings.masterVolume * 100)}%</label>
-                  <input type="range" min="0" max="1" step="0.05" value={draftSettings.masterVolume} onChange={event => setDraftSettings(prev => ({ ...prev, masterVolume: Number(event.target.value) }))} style={styles.rangeInput} />
-                  <ToggleRow label="记录错误日志，方便排查安装包问题" checked={draftSettings.errorLoggingEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, errorLoggingEnabled: v }))} />
-                </SettingBlock>
+                {activeSettingsSection === 'ai' && (
+                  <SettingBlock title="AI 代理设置" icon={<Zap size={24} />}>
+                    <ToggleRow label="启用 AI 对话增强" checked={draftSettings.aiEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, aiEnabled: v }))} />
+                    <ToggleRow label="优先使用流式输出" checked={draftSettings.aiAllowStreaming} onChange={v => setDraftSettings(prev => ({ ...prev, aiAllowStreaming: v }))} />
+                    <label style={styles.settingLabel}>AI 代理地址</label>
+                    <input value={draftSettings.aiProxyUrl} onChange={event => setDraftSettings(prev => ({ ...prev, aiProxyUrl: event.target.value }))} placeholder="https://your-ai-proxy.example.com/chat" style={styles.settingInput} />
+                    <button type="button" onClick={handleTestAIProxy} disabled={aiProxyTesting} className="small-icon-button">{aiProxyTesting ? '测试中...' : '测试 AI 代理'}</button>
+                  </SettingBlock>
+                )}
 
-                <SettingBlock title="账号与学校信息" icon={<ShieldCheck size={24} />}>
-                  <div style={styles.settingValue}>{authSession?.mode === 'account' ? `账号：${authSession.username ?? authSession.displayName}` : authSession?.mode === 'guest' ? '昵称档案模式' : '本地模式'}</div>
-                  <div style={dbHealth?.available ? styles.dbOk : styles.dbWarn}>{dbHealth?.message ?? '正在检测数据库状态'}</div>
-                  <div style={styles.settingActions}>
-                    <button type="button" onClick={onRefreshDbHealth} className="small-icon-button">刷新数据库状态</button>
-                    <button type="button" onClick={onLogout} className="small-icon-button">退出当前档案</button>
-                  </div>
-                  <div style={styles.schoolGrid}>
-                    {DEFAULT_SCHOOL_CONFIG.contacts.slice(0, 3).map(contact => (
-                      <div key={contact.id} style={styles.schoolCard}>
-                        <strong>{contact.label}</strong>
-                        <span>{contact.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </SettingBlock>
+                {activeSettingsSection === 'experience' && (
+                  <SettingBlock title="游戏体验" icon={<Gamepad2 size={24} />}>
+                    <ToggleRow label="记录错误日志，方便排查安装包问题" checked={draftSettings.errorLoggingEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, errorLoggingEnabled: v }))} />
+                  </SettingBlock>
+                )}
+
+                {activeSettingsSection === 'audio' && (
+                  <SettingBlock title="音频设置" icon={<Bell size={24} />}>
+                    <ToggleRow label="启用背景音景" checked={draftSettings.bgmEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, bgmEnabled: v }))} />
+                    <ToggleRow label="启用按钮音效" checked={draftSettings.sfxEnabled} onChange={v => setDraftSettings(prev => ({ ...prev, sfxEnabled: v }))} />
+                    <label style={styles.settingLabel}>主音量 {Math.round(draftSettings.masterVolume * 100)}%</label>
+                    <input type="range" min="0" max="1" step="0.05" value={draftSettings.masterVolume} onChange={event => setDraftSettings(prev => ({ ...prev, masterVolume: Number(event.target.value) }))} style={styles.rangeInput} />
+                  </SettingBlock>
+                )}
+
+                {activeSettingsSection === 'school' && (
+                  <SettingBlock title="学校信息" icon={<BookOpen size={24} />}>
+                    <div style={styles.schoolGrid}>
+                      {DEFAULT_SCHOOL_CONFIG.contacts.slice(0, 3).map(contact => (
+                        <div key={contact.id} style={styles.schoolCard}>
+                          <strong>{contact.label}</strong>
+                          <span>{contact.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SettingBlock>
+                )}
+
+                {activeSettingsSection === 'about' && (
+                  <SettingBlock title="关于游戏" icon={<CircleHelp size={24} />}>
+                    <div style={styles.settingValue}>AI 校园生存模拟器</div>
+                    <div style={styles.saveMeta}>版本：{releaseInfo?.version ?? '1.0.0'}</div>
+                    <div style={styles.saveMeta}>内容纯属虚构，用于校园风险识别与选择训练。</div>
+                  </SettingBlock>
+                )}
 
                 <div style={styles.settingActions}>
                   <button type="button" onClick={() => onUpdateSettings?.(draftSettings)} className="primary-cta" style={styles.panelAction} data-testid="save-settings-button">保存设置</button>
@@ -1008,7 +1079,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     background: 'rgba(255,255,255,0.055)',
     border: '1px solid var(--color-border)',
-    color: 'var(--color-text)'
+    color: 'var(--color-text)',
+    cursor: 'pointer'
+  },
+  saveDeleteButton: {
+    width: 32,
+    height: 32,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: 8,
+    color: 'var(--color-text-dim)',
+    background: 'rgba(255,255,255,0.045)',
+    border: '1px solid transparent'
   },
   saveThumb: {
     width: '100%',
@@ -1158,12 +1240,14 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 14,
+    width: '100%',
     minHeight: 60,
     padding: '0 18px',
     borderRadius: 10,
     color: 'var(--color-text-dim)',
     fontSize: 17,
-    fontWeight: 800
+    fontWeight: 800,
+    textAlign: 'left'
   },
   settingsSideItemActive: {
     color: 'var(--color-text)',

@@ -93,7 +93,7 @@ export default function App() {
 
     if (phase !== 'playing' || !gameState.currentLocation) {
       if (phase === 'menu') {
-        soundEngine.playBGM('preset:menu')
+        soundEngine.playBGM('/audio/bgm/menu.ogg')
       } else {
         soundEngine.stopBGM()
       }
@@ -102,13 +102,13 @@ export default function App() {
 
     const loc = gameState.currentLocation.toLowerCase()
     if (loc.includes('宿舍')) {
-      soundEngine.playBGM('preset:daily')
+      soundEngine.playBGM('/audio/bgm/daily.ogg')
     } else if (loc.includes('教室') || loc.includes('图书馆')) {
-      soundEngine.playBGM('preset:study')
+      soundEngine.playBGM('/audio/bgm/daily.ogg')
     } else if (loc.includes('深夜') || loc.includes('暗') || loc.includes('哭')) {
-      soundEngine.playBGM('preset:emotional')
+      soundEngine.playBGM('/audio/bgm/menu.ogg')
     } else {
-      soundEngine.playBGM('preset:campus')
+      soundEngine.playBGM('/audio/bgm/daily.ogg')
     }
   }, [activeSettings.bgmEnabled, phase, gameState.currentLocation])
 
@@ -525,6 +525,26 @@ export default function App() {
     handleLoadRuntimeSave(saveData)
   }, [currentProfile, handleLoadRuntimeSave, showNotice])
 
+  const handleDeleteSave = useCallback(async (slotId: string) => {
+    if (!currentProfile) return
+
+    try {
+      await saveRepository.delete(currentProfile.id, slotId)
+      const slots = await saveRepository.list(currentProfile.id)
+      setSaveSlots(slots)
+      setHasAutosave(Boolean(slots.find(slot => slot.slotId === AUTOSAVE_SLOT_ID)))
+      showNotice({ type: 'success', title: '存档已删除', message: '该存档已从当前档案移除。' })
+    } catch (err) {
+      showNotice({ type: 'error', title: '删除存档失败', message: '请稍后重试，或检查本地数据目录权限。' })
+      await logAppEvent({
+        level: 'error',
+        scope: 'delete-save',
+        message: err instanceof Error ? err.message : '删除存档失败',
+        details: { slotId }
+      })
+    }
+  }, [currentProfile, showNotice])
+
   const handleManualSave = useCallback(async () => {
     if (!currentProfile) {
       showNotice({ type: 'warning', title: '没有当前档案', message: '请先创建或选择一个玩家档案。' })
@@ -674,6 +694,7 @@ export default function App() {
           settings={settings}
           releaseInfo={releaseInfo}
           onLoadSave={handleLoadSave}
+          onDeleteSave={handleDeleteSave}
           onSaveManual={handleManualSave}
           onUpdateSettings={handleUpdateSettings}
           onShowNotice={showNotice}

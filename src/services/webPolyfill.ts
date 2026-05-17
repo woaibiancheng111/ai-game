@@ -372,6 +372,10 @@ export function initWebPolyfill(): void {
       read: async (profileId: string, slotId: string) => {
         const save = getSaves().find(s => s.profileId === profileId && s.slotId === slotId)
         return save?.data ?? null
+      },
+      delete: async (profileId: string, slotId: string) => {
+        setSaves(getSaves().filter(s => !(s.profileId === profileId && s.slotId === slotId)))
+        return true
       }
     },
     progress: {

@@ -32,6 +32,10 @@ export class SaveRepository {
     return normalizeSaveSlotMeta(written, input.data)
   }
 
+  async delete(profileId: string, slotId: string): Promise<boolean> {
+    return Boolean(await window.electronAPI.saves.delete(profileId, slotId))
+  }
+
   async writeLegacyAutosave(data: GameSaveData): Promise<void> {
     await window.electronAPI.storage.set(AUTOSAVE_KEY, data)
   }

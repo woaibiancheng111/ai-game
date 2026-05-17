@@ -614,6 +614,15 @@ async function readLocalSave(profileId: string, slotId: string): Promise<unknown
   return saves.find(save => save.slotId === slotId)?.data ?? null
 }
 
+async function deleteLocalSave(profileId: string, slotId: string): Promise<boolean> {
+  const store = await getStore()
+  const existing = store.get(LOCAL_SAVES_KEY)
+  const saves: SaveSlotRecord[] = Array.isArray(existing) ? existing as SaveSlotRecord[] : []
+  const nextSaves = saves.filter(save => !(save.profileId === profileId && save.slotId === slotId))
+  store.set(LOCAL_SAVES_KEY, nextSaves)
+  return nextSaves.length !== saves.length
+}
+
 function saveToMeta(save: SaveSlotRecord) {
   return {
     slotId: save.slotId,
@@ -1216,6 +1225,16 @@ ipcMain.handle('saves:read', async (_event, profileId: string, slotId: string) =
   })
 
   return mysqlSave ?? readLocalSave(profileId, slotId)
+})
+
+ipcMain.handle('saves:delete', async (_event, profileId: string, slotId: string) => {
+  await withDb(async (pool) => {
+    await pool.query('DELETE FROM saves WHERE profile_id = ? AND slot_id = ?', [profileId, slotId])
+    return true
+  })
+
+  await deleteLocalSave(profileId, slotId)
+  return true
 })
 
 ipcMain.handle('progress:get', async (_event, profileId: string) => {
