@@ -19,7 +19,7 @@ import { getUnlockedAchievementIds } from '../engine/achievements'
 import { soundEngine } from '../services/soundEngine'
 import { aiProxyClient } from '../services/aiProxyClient'
 import { logAppEvent } from '../services/appLog'
-import { loadAppSettings, mergeAppSettings, saveAppSettings } from '../services/settings'
+import { DEFAULT_AI_PROXY_URL, loadAppSettings, mergeAppSettings, saveAppSettings } from '../services/settings'
 import { normalizeSaveData, saveRepository } from '../services/saveRepository'
 
 type GamePhase = 'setup' | 'menu' | 'playing' | 'gameover'
@@ -65,7 +65,7 @@ export default function App() {
   const activeSettings = useMemo(() => settings ?? mergeAppSettings({
     aiEnabled: true,
     aiAllowStreaming: true,
-    aiProxyUrl: '',
+    aiProxyUrl: DEFAULT_AI_PROXY_URL,
     bgmEnabled: true,
     sfxEnabled: true,
     masterVolume: 0.5,

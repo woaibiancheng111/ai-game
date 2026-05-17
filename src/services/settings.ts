@@ -1,9 +1,11 @@
 import type { AppSettings } from '../data/types'
 
+export const DEFAULT_AI_PROXY_URL = 'https://ai.shixi.chat/chat'
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   aiEnabled: true,
   aiAllowStreaming: true,
-  aiProxyUrl: '',
+  aiProxyUrl: DEFAULT_AI_PROXY_URL,
   bgmEnabled: true,
   sfxEnabled: true,
   masterVolume: 0.5,
@@ -19,7 +21,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
   return {
     aiEnabled: typeof maybeSettings.aiEnabled === 'boolean' ? maybeSettings.aiEnabled : DEFAULT_APP_SETTINGS.aiEnabled,
     aiAllowStreaming: typeof maybeSettings.aiAllowStreaming === 'boolean' ? maybeSettings.aiAllowStreaming : DEFAULT_APP_SETTINGS.aiAllowStreaming,
-    aiProxyUrl: typeof maybeSettings.aiProxyUrl === 'string' ? maybeSettings.aiProxyUrl.trim() : DEFAULT_APP_SETTINGS.aiProxyUrl,
+    aiProxyUrl: typeof maybeSettings.aiProxyUrl === 'string' && maybeSettings.aiProxyUrl.trim()
+      ? maybeSettings.aiProxyUrl.trim()
+      : DEFAULT_APP_SETTINGS.aiProxyUrl,
     bgmEnabled: typeof maybeSettings.bgmEnabled === 'boolean' ? maybeSettings.bgmEnabled : DEFAULT_APP_SETTINGS.bgmEnabled,
     sfxEnabled: typeof maybeSettings.sfxEnabled === 'boolean' ? maybeSettings.sfxEnabled : DEFAULT_APP_SETTINGS.sfxEnabled,
     masterVolume: clampVolume(maybeSettings.masterVolume),

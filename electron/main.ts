@@ -107,10 +107,11 @@ const CURRENT_SESSION_KEY = 'db:currentSession'
 const LOCAL_PROGRESS_KEY = 'db:progress'
 const LOCAL_ACHIEVEMENTS_KEY = 'db:achievements'
 const APP_SETTINGS_KEY = 'settings:app'
+const DEFAULT_AI_PROXY_URL = 'https://ai.shixi.chat/chat'
 const DEFAULT_APP_SETTINGS: AppSettingsRecord = {
   aiEnabled: true,
   aiAllowStreaming: true,
-  aiProxyUrl: '',
+  aiProxyUrl: DEFAULT_AI_PROXY_URL,
   bgmEnabled: true,
   sfxEnabled: true,
   masterVolume: 0.5,
@@ -153,7 +154,9 @@ function normalizeAppSettings(value: unknown): AppSettingsRecord {
   return {
     aiEnabled: typeof maybeSettings.aiEnabled === 'boolean' ? maybeSettings.aiEnabled : DEFAULT_APP_SETTINGS.aiEnabled,
     aiAllowStreaming: typeof maybeSettings.aiAllowStreaming === 'boolean' ? maybeSettings.aiAllowStreaming : DEFAULT_APP_SETTINGS.aiAllowStreaming,
-    aiProxyUrl: typeof maybeSettings.aiProxyUrl === 'string' ? maybeSettings.aiProxyUrl.trim() : DEFAULT_APP_SETTINGS.aiProxyUrl,
+    aiProxyUrl: typeof maybeSettings.aiProxyUrl === 'string' && maybeSettings.aiProxyUrl.trim()
+      ? maybeSettings.aiProxyUrl.trim()
+      : DEFAULT_APP_SETTINGS.aiProxyUrl,
     bgmEnabled: typeof maybeSettings.bgmEnabled === 'boolean' ? maybeSettings.bgmEnabled : DEFAULT_APP_SETTINGS.bgmEnabled,
     sfxEnabled: typeof maybeSettings.sfxEnabled === 'boolean' ? maybeSettings.sfxEnabled : DEFAULT_APP_SETTINGS.sfxEnabled,
     masterVolume: typeof maybeSettings.masterVolume === 'number' && Number.isFinite(maybeSettings.masterVolume)
